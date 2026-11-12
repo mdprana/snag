@@ -1,0 +1,37 @@
+{
+  "name": "snag",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --experimental-https -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "eslint",
+    "test": "vitest run",
+    "check:audit": "npm audit --omit=dev --audit-level=high",
+    "check:secrets": "if command -v gitleaks >/dev/null; then gitleaks detect --source . --no-banner; else echo 'gitleaks not installed, skipping secret scan'; fi",
+    "db:migrate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --env-file-if-exists=.env scripts/migrate.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "motion": "^14.12.0",
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "web-push": "^4.0.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "vitest": "^5.1.0"
+  }
+}
