@@ -28,7 +28,7 @@ function provider() {
 }
 
 async function flow() {
-  const response = await start(new Request(`${appUrl}/api/auth/epic`));
+  const response = await start();
   const url = new URL(response.headers.get("location")!);
   const cookie = response.headers.get("set-cookie")!.split(";")[0];
   return { response, url, cookie, state: url.searchParams.get("state")! };
@@ -134,7 +134,7 @@ describe("Epic OAuth", () => {
 
   it.each([undefined, "false", "TRUE"])("routes return 404 when EPIC_LOGIN_ENABLED is not true (%s)", async (flag) => {
     env.EPIC_LOGIN_ENABLED = flag;
-    expect((await start(new Request(`${appUrl}/api/auth/epic`))).status).toBe(404);
+    expect((await start()).status).toBe(404);
     expect((await callback(request("state"))).status).toBe(404);
     expect(fetch).not.toHaveBeenCalled();
     expect((await db.execute("SELECT * FROM auth_flows")).rows).toHaveLength(0);
@@ -181,8 +181,8 @@ describe("Epic OAuth", () => {
   });
 
   it.each(["start", "callback"])("eleventh %s request returns 429 with Retry-After", async (route) => {
-    for (let i = 0; i < 10; i++) await (route === "start" ? start(new Request(`${appUrl}/api/auth/epic`)) : callback(request("bad")));
-    const response = await (route === "start" ? start(new Request(`${appUrl}/api/auth/epic`)) : callback(request("bad")));
+    for (let i = 0; i < 10; i++) await (route === "start" ? start() : callback(request("bad")));
+    const response = await (route === "start" ? start() : callback(request("bad")));
     expect(response.status).toBe(429);
     expect(Number(response.headers.get("retry-after"))).toBeGreaterThan(0);
   });

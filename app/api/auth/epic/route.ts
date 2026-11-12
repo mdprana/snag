@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { epicAuthorizeUrl } from "@/src/auth/epic";
-import { randomToken, sha256 } from "@/src/lib/crypto";
+import { randomToken } from "@/src/lib/crypto";
 import { db } from "@/src/lib/db";
 import { env } from "@/src/lib/env";
 import { hit } from "@/src/lib/ratelimit";
 
-export async function GET(request: Request): Promise<Response> {
+export async function GET(): Promise<Response> {
   if (env.EPIC_LOGIN_ENABLED !== "true") return new Response(null, { status: 404 });
-  const limit = await hit(db(), `epic-start:${sha256(request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown")}`, 10, 60);
+  const limit = await hit(db(), "epic-start:global", 10, 60);
   if (!limit.ok) return new Response(null, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   const state = randomToken();
   const verifier = randomToken();

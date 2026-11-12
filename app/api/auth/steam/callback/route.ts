@@ -4,8 +4,11 @@ import { env } from "@/src/lib/env";
 import { db } from "@/src/lib/db";
 import { upsertIdentity } from "@/src/lib/users";
 import { createSession } from "@/src/lib/session";
+import { hit } from "@/src/lib/ratelimit";
 
 export async function GET(request: Request): Promise<Response> {
+  const limit = await hit(db(), "steam-callback:global", 10, 60);
+  if (!limit.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   const url = new URL(request.url);
   const flowId = url.searchParams.get("n") ?? "";
   const flowCookie = request.headers.get("cookie")?.split(";").map((part) => part.trim()).find((part) => part.startsWith("__Host-snag_flow="))?.slice("__Host-snag_flow=".length);

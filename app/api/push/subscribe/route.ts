@@ -16,6 +16,7 @@ export async function POST(request: Request): Promise<Response> {
   const parsed = PushSubscriptionInput.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
   const { endpoint, keys } = parsed.data;
-  await db().execute({ sql: "INSERT INTO push_subs(id, user_id, endpoint, p256dh, auth, created_at) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth", args: [randomToken(16), session.userId, endpoint, keys.p256dh, keys.auth, Date.now()] });
+  const result = await db().execute({ sql: "INSERT INTO push_subs(id, user_id, endpoint, p256dh, auth, created_at) VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth WHERE push_subs.user_id = excluded.user_id", args: [randomToken(16), session.userId, endpoint, keys.p256dh, keys.auth, Date.now()] });
+  if (result.rowsAffected === 0) return NextResponse.json({ error: "Endpoint already registered" }, { status: 409 });
   return NextResponse.json({ ok: true });
 }

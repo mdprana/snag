@@ -3,8 +3,11 @@ import { randomToken } from "@/src/lib/crypto";
 import { db } from "@/src/lib/db";
 import { env } from "@/src/lib/env";
 import { steamLoginUrl } from "@/src/auth/steam";
+import { hit } from "@/src/lib/ratelimit";
 
 export async function GET(): Promise<Response> {
+  const limit = await hit(db(), "steam-start:global", 10, 60);
+  if (!limit.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   const nonceId = randomToken();
   await db().execute({ sql: "INSERT INTO auth_flows(id, provider, expires_at) VALUES(?, 'steam', ?)", args: [nonceId, Date.now() + 600000] });
   const response = NextResponse.redirect(steamLoginUrl(env.APP_URL, nonceId));

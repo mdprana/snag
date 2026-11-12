@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { exchangeEpicCode } from "@/src/auth/epic";
-import { safeEqual, sha256 } from "@/src/lib/crypto";
+import { safeEqual } from "@/src/lib/crypto";
 import { db } from "@/src/lib/db";
 import { env } from "@/src/lib/env";
 import { log } from "@/src/lib/log";
@@ -10,7 +10,7 @@ import { upsertIdentity } from "@/src/lib/users";
 
 export async function GET(request: Request): Promise<Response> {
   if (env.EPIC_LOGIN_ENABLED !== "true") return new Response(null, { status: 404 });
-  const limit = await hit(db(), `epic-callback:${sha256(request.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown")}`, 10, 60);
+  const limit = await hit(db(), "epic-callback:global", 10, 60);
   if (!limit.ok) return new Response(null, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   const failure = () => {
     log("warn", "epic_login_failed");
