@@ -18,24 +18,29 @@ Free-game discovery for **Epic Games Store** and **Steam**.
 
 ---
 
-> **In development.** Not deployed or ready for public accounts. Current implementation is a technical foundation, not a finished game-discovery experience.
+> **In development.** Not deployed or ready for public accounts. Provider login and browser push are implemented but unverified live. Self-host examples are untested.
 
 ## Overview
 
-Discover an offer, check its claim window, and open the store to keep it. Snag is being built to bring limited-time game giveaways into one place.
+Discover an offer, check its claim window, and open the store to keep it. Snag brings limited-time game giveaways into one place, using the last known offers stored in its database.
 
-### Available foundation
+### Current implementation
 
 - **Application shell** with Next.js App Router, React and Tailwind CSS.
 - **Database migrations** for libSQL.
 - **Session and request utilities** covering origin checks, rate limiting and input validation.
 - **Security headers** with a nonce-based Content Security Policy.
 - **Configuration validation** and sensitive-field redaction in logs.
-- **Automated tests** for database and security utilities.
+- **Public landing page**, database-backed game feed and game detail pages, with claim links and per-account claim tracking.
+- **Offer polling** for Epic, Steam and GamerPower, with last-known data retained on source errors. An external scheduler must invoke the protected cron route; the app does not schedule itself.
+- **Steam sign-in**, optional Epic sign-in, linked accounts, logout and account deletion. Provider login remains unverified live; Epic login is disabled by default.
+- **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Browser push delivery remains unverified live, including iPhone Home Screen behavior.
+- **Privacy and self-host pages**. Optional third-party claiming tools are separate from Snag; their examples have not been tested as a deployment.
+- **Automated unit and browser tests** using local data and provider fixtures, not live account credentials.
 
-### In progress
+### Not verified or deployed
 
-Store feeds, sign-in, claim tracking, browser push notifications and self-hosted claiming. These are planned product flows, not available features. The home page remains a placeholder.
+Production hosting, live provider login, live push delivery and third-party self-host examples still need operator verification. Owner-only ASF integration is not connected. Snag never automatically claims games for public users.
 
 ## Development
 
@@ -71,7 +76,7 @@ npm run dev
 
 Open **https://localhost:3100**. Development uses a local HTTPS certificate, so your browser may show a certificate warning. Only trust a certificate you generated locally.
 
-These settings are required by the current validator even before push and cron flows are complete. Never commit `.env`, credentials or database files.
+These settings are required by the current validator even when push and cron are not being exercised. Never commit `.env`, credentials or database files.
 
 ## Configuration
 
@@ -102,7 +107,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-Tests cover the current foundation, not live provider integrations or finished browser flows.
+Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable database in `.work/` and starts local HTTPS on port 3100.
 
 Additional dependency and secret checks:
 
@@ -116,17 +121,69 @@ The secret check requires `gitleaks`; without it, the command reports a skip. A 
 ## Structure
 
 ```text
-app/                    Application layout, styles and home page
-src/lib/                Database, environment and security utilities
+app/                    Pages, API routes, application layout and styles
+src/components/         Feed, account and notification UI
+src/lib/                Database, auth, polling, push and security utilities
 db/migrations/          Versioned SQL migrations
 scripts/migrate.ts      Migration runner
-tests/                  Utility tests and provider-response fixtures
+tests/                  Unit tests and provider-response fixtures
+e2e/                    Local Playwright browser tests
 proxy.ts                Content Security Policy and security headers
 ```
 
 ## Deployment and self-hosting
 
-Public hosting and end-to-end setup are not ready. Deployment instructions, verified screenshots and self-hosted claiming guidance will follow once those flows are exercised. Self-hosted background claiming requires an always-on machine, separate from the hosted web application.
+Public hosting is not configured. Before accepting public accounts, verify provider callbacks and push delivery, configure HTTPS and a scheduler, and identify the operator, processors, privacy contact and backup-retention policy. Account deletion in Settings requires typing `DELETE`; it removes account-linked records from the active database, not operator backups or store accounts.
+
+### Optional claiming tools — untested examples
+
+The `/self-host` page contains fuller setup and safety notes. These third-party tools require your own credentials on your own **always-on machine** (home PC, compatible Raspberry Pi or VPS). Check image CPU support and allow about 2 GB RAM plus OS headroom for Epic’s browser. They do not connect to Snag or report claims to it.
+
+The following Compose example has **not been deployment-tested**. Review upstream instructions for [ArchiSteamFarm](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/Docker), [Citrinate/FreePackages](https://github.com/Citrinate/FreePackages) and [epicgames-freegames-node](https://github.com/claabs/epicgames-freegames-node). Pin reviewed image digests before unattended use and verify plugin compatibility.
+
+In a private directory outside this checkout:
+
+```sh
+umask 077
+mkdir -p asf/config asf/plugins epic/config
+```
+
+Save as `compose.yaml`:
+
+```yaml
+services:
+  asf:
+    image: justarchinet/archisteamfarm:latest
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./asf/config:/app/config
+      - ./asf/plugins:/app/plugins
+  epic:
+    image: ghcr.io/claabs/epicgames-freegames-node:latest
+    restart: unless-stopped
+    init: true
+    shm_size: 1gb
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:3300:3000"
+    volumes:
+      - ./epic/config:/usr/app/config
+```
+
+Before starting, save `{"IPC":false}` as `asf/config/ASF.json`. No ASF ports are published: keep IPC disabled. Install a trusted, compatible FreePackages release under `asf/plugins/FreePackages`, preserve its license notices, and configure your bot using upstream instructions. Enable `EnableFreePackages`; review filters such as `Types: ["Game"]`, `NoCostOnly: true` and `IgnoreFreeWeekends: true`. Enter credentials and Steam Guard only on your own machine; interactive prompts can use `docker compose attach asf` (detach with Ctrl-P, Ctrl-Q).
+
+Configure `epic/config/config.json` from upstream instructions, with a notifier you control and `webPortalConfig.baseUrl` pointing to the loopback helper. Keep public tunneling disabled. For remote access, use an authenticated SSH tunnel, not a public port. Epic may require manual device login, checkout or CAPTCHA; unattended claiming is not guaranteed.
+
+```sh
+docker compose config --quiet
+docker compose up -d
+docker compose logs --tail=50
+docker compose down
+```
+
+Logs and bind mounts may contain credentials, sessions or login links. Restrict directory access, never use `chmod 777`, and never commit these files. Use Steam Guard and Epic 2FA. Back up bind-mounted directories securely while stopped; `docker compose down` preserves them. Define encrypted-backup retention. Back up before pulling updates and check plugin compatibility after upgrades. Automation may fail or conflict with account terms; review upstream guidance before use.
 
 ## Provider disclaimer
 
