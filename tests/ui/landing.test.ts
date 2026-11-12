@@ -32,6 +32,8 @@ describe("landing data", () => {
     await db.executeMultiple(readFileSync("db/migrations/001_init.sql", "utf8") + readFileSync("db/migrations/002_poll_runs.sql", "utf8"));
     expect(await lastPoll(db)).toBeNull();
     await db.execute("INSERT INTO poll_runs(source, ok, at) VALUES('epic', 1, 100), ('epic', 0, 300), ('steam', 1, 200)");
-    expect(await lastPoll(db)).toBe(200);
+    expect(await lastPoll(db)).toBeNull();
+    await db.execute("INSERT INTO poll_runs(source, ok, at) VALUES('gamerpower', 1, 150)");
+    expect(await lastPoll(db)).toBe(100);
   });
 });

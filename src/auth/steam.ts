@@ -38,7 +38,12 @@ export async function verifySteamCallback(params: URLSearchParams, ctx: { appUrl
   }
   const check = new URLSearchParams(params);
   check.set("openid.mode", "check_authentication");
-  const response = await (ctx.fetchFn ?? fetch)(STEAM_ENDPOINT, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: check });
+  let response: Response;
+  try {
+    response = await (ctx.fetchFn ?? fetch)(STEAM_ENDPOINT, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: check, signal: AbortSignal.timeout(15000), redirect: "error" });
+  } catch {
+    return { error: "provider_unavailable" };
+  }
   if (!response.ok || !(await response.text()).split(/\r?\n/).includes("is_valid:true")) return { error: "invalid_assertion" };
   await ctx.db.execute({ sql: "DELETE FROM auth_flows WHERE id = ?", args: [ctx.flowId] });
   return { steamId: match[1] };

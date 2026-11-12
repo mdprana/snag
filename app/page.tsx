@@ -1,9 +1,10 @@
 import { connection } from "next/server";
 import { cookies } from "next/headers";
 import { db } from "@/src/lib/db";
-import { lastPoll, listFeed, soonestEnding } from "@/src/lib/games";
+import { lastPoll, listArchive, listFeed, soonestEnding } from "@/src/lib/games";
+import { selectHero } from "@/src/lib/hero";
+import { GameArt } from "@/src/components/GameArt";
 import { getSession } from "@/src/lib/session";
-import { CoverStack } from "@/src/components/CoverStack";
 import { SiteHeader } from "@/src/components/SiteHeader";
 import { Reveal } from "@/src/components/Reveal";
 import { GameRow } from "@/src/components/GameRow";
@@ -13,21 +14,27 @@ export default async function Home() {
   await connection();
   const now = new Date();
   const session = await getSession(db(), (await cookies()).toString());
-  const feed = await listFeed(db(), session?.userId, now);
-  const checked = await lastPoll(db());
+  const database = db();
+  const feed = await listFeed(database, session?.userId, now);
+  const archive = await listArchive(database, now);
+  const checked = await lastPoll(database);
   const ending = soonestEnding(feed.freeNow);
+  const hero = selectHero(feed.freeNow, feed.upcoming, archive);
   const stale = checked === null || now.getTime() - checked > 90 * 60000;
+  const heroTitle = hero.state === "active" ? `${feed.freeNow.length} games free to keep right now` : hero.state === "upcoming" ? "Next drop on the horizon" : "Between drops. Stay ready.";
   return <>
     <SiteHeader signedIn={Boolean(session)} />
     <main id="main" className="shell">
       <section className="hero" aria-labelledby="available-title">
         <div className="enter">
-          <h1 id="available-title" className="hero-title"><span data-testid="free-count">{feed.freeNow.length}</span> games free to keep<br />right now</h1>
+          <h1 id="available-title" className="hero-title">{hero.state === "active" ? <><span data-testid="free-count">{feed.freeNow.length}</span> games free to keep<br />right now</> : heroTitle}</h1>
           <p className="hero-copy dim mt-5">Epic and Steam offers, with time to claim before they disappear.</p>
-          {ending?.endsAt && <div className="my-7"><p className="meta mb-3">First offer ends in</p><div className="numeral"><Countdown endsAt={ending.endsAt} now={now.getTime()} /></div><p className="dim mt-3">{ending.title}. Claim before <time dateTime={new Date(ending.endsAt).toISOString()}>{formatUtc(ending.endsAt)}</time>.</p></div>}
-          <a className="btn btn-signal mt-6" href="/feed">Browse free games</a>
+          {hero.state === "active" && ending?.endsAt && <div className="my-7"><p className="meta mb-3">First offer ends in</p><div className="numeral"><Countdown endsAt={ending.endsAt} now={now.getTime()} /></div><p className="dim mt-3">{ending.title}. Claim before <time dateTime={new Date(ending.endsAt).toISOString()}>{formatUtc(ending.endsAt)}</time>.</p></div>}
+          {hero.state === "upcoming" && hero.game?.startsAt && <p className="hero-copy mt-7">Coming next: <time dateTime={new Date(hero.game.startsAt).toISOString()}>{formatUtc(hero.game.startsAt)}</time>.</p>}
+          {hero.state === "archive" && <p className="hero-copy mt-7">Previously featured. Not currently available.</p>}
+          <a className="btn btn-signal mt-6" href={hero.state === "active" ? "/feed" : hero.game ? `/g/${encodeURIComponent(hero.game.id)}` : "/feed"}>{hero.state === "active" ? "Browse free games" : hero.state === "upcoming" ? "View upcoming game" : "View game details"}</a>
         </div>
-        {feed.freeNow.length ? <CoverStack games={feed.freeNow} /> : <p className="banner">Nothing free right now. We check every 30 minutes. Browse the feed for upcoming offers.</p>}
+        {hero.game ? <a className="hero-art-link" href={`/g/${encodeURIComponent(hero.game.id)}`}><GameArt imageUrl={hero.game.imageUrl} title={hero.game.title} store={hero.game.store} priority eager sizes="(min-width: 1024px) 520px, 90vw" /></a> : <div className="hero-empty-art" aria-hidden="true"><span>SNAG</span></div>}
       </section>
       <p role="status" className="banner mb-8">{stale ? "Updates delayed. " : "Offers checked "}{checked === null ? "No successful checks yet; availability is unconfirmed." : <><time dateTime={new Date(checked).toISOString()}>{formatUtc(checked)}</time>{stale ? "; showing last known offers." : "."}</>} Availability varies by region.</p>
       {feed.upcoming.length > 0 && <section className="section" aria-labelledby="next-title"><h2 id="next-title" className="section-title mb-6">Coming next</h2><Reveal>{feed.upcoming.map(game => <GameRow key={game.id} game={game} now={now.getTime()} signedIn={Boolean(session)} />)}</Reveal></section>}

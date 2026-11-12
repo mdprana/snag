@@ -20,12 +20,12 @@ describe("Epic parser", () => {
 
   it("active promo with discountPercentage 0 is free with checkout url 1-<namespace>-<id>", () => {
     expect(parseEpic(fixture, now).map((game) => game.title)).toEqual([base.title, "Flotsam"]);
-    expect(parseEpic(payload(), new Date(promo.startDate))).toEqual([{
+    expect(parseEpic(payload(), new Date(promo.startDate))).toEqual([expect.objectContaining({
       store: "epic", externalId: base.id, kind: "free_to_keep", title: base.title,
       storeUrl: `https://store.epicgames.com/en-US/p/${base.offerMappings[0].pageSlug}`,
       claimUrl: `https://store.epicgames.com/purchase?offers=1-${base.namespace}-${base.id}`,
-      imageUrl: base.keyImages[0].url, startsAt: Date.parse(promo.startDate), endsAt: Date.parse(promo.endDate), upcoming: false,
-    }]);
+imageUrl: base.keyImages[0].url, startsAt: Date.parse(promo.startDate), endsAt: Date.parse(promo.endDate), upcoming: false,
+     })]);
   });
 
   it("requires both zero price and zero discount percentage", () => {
@@ -87,6 +87,10 @@ describe("Epic parser", () => {
 });
 
 describe("Epic fetch", () => {
+  it("rejects oversized bodies and redirects", async () => {
+    await expect(fetchEpic(async () => new Response(" ".repeat(1048577), { headers: { "content-type": "application/json" } }))).rejects.toThrow(/large/);
+    await expect(fetchEpic(async () => new Response(null, { status: 302 }))).rejects.toThrow(SourceError);
+  });
   it("fetchEpic throws SourceError on HTML response and on 500", async () => {
     for (const response of [new Response("<html/>", { headers: { "content-type": "text/html" } }), new Response("{}", { status: 500, headers: { "content-type": "application/json" } })]) {
       await expect(fetchEpic(vi.fn<typeof fetch>().mockResolvedValue(response))).rejects.toThrow(SourceError);
@@ -100,7 +104,7 @@ describe("Epic fetch", () => {
     const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(Response.json(fixture));
     expect(await fetchEpic(fetchFn)).toEqual(parseEpic(fixture, now));
     expect(timeout).toHaveBeenCalledWith(15000);
-    expect(fetchFn).toHaveBeenCalledWith("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", { signal: expect.any(AbortSignal), cache: "no-store" });
+    expect(fetchFn).toHaveBeenCalledWith("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", { signal: expect.any(AbortSignal), cache: "no-store", redirect: "error" });
     timeout.mockRestore();
   });
 

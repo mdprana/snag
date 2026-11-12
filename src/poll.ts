@@ -6,6 +6,7 @@ import { fetchEpic, type GameRow } from "./sources/epic.ts";
 import { fetchGamerPower } from "./sources/gamerpower.ts";
 import { fetchSteamStore } from "./sources/steamstore.ts";
 import type { Client } from "@libsql/client";
+import { saveMetadata } from "./lib/metadata.ts";
 
 type PushSubscription = { id: string; endpoint: string; p256dh: string; auth: string };
 type Send = (subscription: PushSubscription, payload: { title: string; body: string; url: string }) => Promise<unknown>;
@@ -19,7 +20,8 @@ export type PollDeps = {
 
 const sources: [string, (fetchFn: typeof fetch) => Promise<GameRow[]>][] = [
   ["epic", fetchEpic],
-  ["steam", async (fetchFn) => [...await fetchSteamStore(fetchFn), ...await fetchGamerPower(fetchFn)]],
+  ["steam", fetchSteamStore],
+  ["gamerpower", fetchGamerPower],
 ];
 
 export async function runPoll(deps: PollDeps = {}): Promise<{ source: string; ok: boolean; count: number }[]> {
@@ -32,7 +34,18 @@ export async function runPoll(deps: PollDeps = {}): Promise<{ source: string; ok
   for (const [source, fetchSource] of sources) {
     try {
       const games = await fetchSource(fetchFn);
-      for (const game of games) await saveGame(client, game, now, send);
+      for (const game of games) {
+        await saveGame(client, game, now, send);
+        if (game.metadata) {
+          try {
+            const row = await client.execute({ sql: "SELECT id FROM games WHERE store=? AND external_id=?", args: [game.store, game.externalId] });
+            await saveMetadata(client, String(row.rows[0].id), game.metadata.provider, game.providerNamespace ?? null, game.metadata, now.getTime());
+          } catch { log("warn", "metadata save failed", { source }); }
+        }
+      }
+      const store = source === "epic" ? "epic" : "steam";
+      const kind = source === "gamerpower" ? "key_giveaway" : "free_to_keep";
+      await client.execute({ sql: `UPDATE games SET ends_at=?, upcoming=0 WHERE store=? AND kind=? AND (ends_at IS NULL OR ends_at>?) AND external_id NOT IN (SELECT value FROM json_each(?))`, args: [now.getTime(), store, kind, now.getTime(), JSON.stringify(games.map(game => game.externalId))] });
       await client.execute({ sql: "INSERT INTO poll_runs(source, ok, count, error, at) VALUES(?, 1, ?, NULL, ?)", args: [source, games.length, now.getTime()] });
       results.push({ source, ok: true, count: games.length });
     } catch (error) {

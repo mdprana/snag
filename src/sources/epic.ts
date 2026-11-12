@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { sourceJson } from "./http.ts";
+import { parseEpicMetadata, type GameMetadata } from "../lib/metadata.ts";
 import { safeImageUrl, safeOutboundUrl } from "../lib/urls.ts";
 
 export type GameRow = {
@@ -12,6 +14,8 @@ export type GameRow = {
   startsAt: number | null;
   endsAt: number | null;
   upcoming: boolean;
+  metadata?: GameMetadata;
+  providerNamespace?: string;
 };
 
 export class SourceError extends Error {
@@ -38,7 +42,8 @@ const schema = z.object({
     offerMappings: mappings.nullable().optional(),
     catalogNs: z.object({ mappings: mappings.nullable().optional() }).nullable().optional(),
     productSlug: z.string().nullable().optional(),
-    keyImages: z.array(z.object({ type: z.string(), url: z.string() })),
+    description: z.unknown().optional(), customAttributes: z.unknown().optional(),
+    keyImages: z.array(z.object({ type: z.string(), url: z.string() })).max(200),
   })) }) }) }),
 });
 
@@ -67,7 +72,10 @@ export function parseEpic(json: unknown, now: Date): GameRow[] {
     if (!storeUrl || !claimUrl) continue;
     const image = element.keyImages.find((image) => image.type === "OfferImageWide")
       ?? element.keyImages.find((image) => image.type === "Thumbnail") ?? element.keyImages[0];
+    let metadata: GameMetadata | undefined;
+    try { metadata = parseEpicMetadata(element, element.id, element.namespace, now.getTime()); } catch {}
     games.push({
+      metadata, providerNamespace: element.namespace,
       store: "epic", externalId: element.id, kind: "free_to_keep", title: element.title,
       storeUrl, claimUrl, imageUrl: image ? safeImageUrl(image.url) : null,
       startsAt: Date.parse(promo.startDate), endsAt: Date.parse(promo.endDate), upcoming: !active,
@@ -78,14 +86,7 @@ export function parseEpic(json: unknown, now: Date): GameRow[] {
 
 export async function fetchEpic(fetchFn: typeof fetch = fetch): Promise<GameRow[]> {
   try {
-    const response = await fetchFn("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", {
-      signal: AbortSignal.timeout(15000), cache: "no-store",
-    });
-    if (!response.ok) throw new SourceError(`Epic HTTP ${response.status}`);
-    if (response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
-      throw new SourceError("Epic response is not JSON");
-    }
-    return parseEpic(await response.json(), new Date());
+    return parseEpic(await sourceJson("https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", fetchFn), new Date());
   } catch (error) {
     if (error instanceof SourceError) throw error;
     throw new SourceError("Epic request failed", { cause: error });

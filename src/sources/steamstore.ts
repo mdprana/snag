@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sourceJson } from "./http.ts";
 import { safeImageUrl, safeOutboundUrl, steamDeepLink } from "../lib/urls.ts";
 import { type GameRow, SourceError } from "./epic.ts";
 
@@ -17,7 +18,9 @@ export function parseSteamSearch(json: unknown): number[] {
   if (!parsed.success) throw new SourceError("Invalid Steam search payload");
   const ids = [...parsed.data.results_html.matchAll(/\bdata-ds-appid\s*=\s*(["'])(\d+)\1/g)]
     .map((match) => Number(match[2])).filter((id) => appId.safeParse(id).success);
-  return [...new Set(ids)];
+  const unique = [...new Set(ids)];
+  if (unique.length > 50) throw new SourceError("Steam search truncated: app limit exceeded");
+  return unique;
 }
 
 export function parseAppDetails(json: unknown, appid: number): GameRow | null {
@@ -39,14 +42,8 @@ export function parseAppDetails(json: unknown, appid: number): GameRow | null {
 }
 
 export async function fetchSteamStore(fetchFn: typeof fetch = fetch): Promise<GameRow[]> {
-  const request = async (url: string): Promise<unknown> => {
-    const response = await fetchFn(url, { signal: AbortSignal.timeout(15000), cache: "no-store" });
-    if (!response.ok) throw new SourceError(`Steam store HTTP ${response.status}`);
-    if (response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
-      throw new SourceError("Steam store response is not JSON");
-    }
-    return response.json();
-  };
+  const budget = AbortSignal.timeout(30000);
+  const request = (url: string): Promise<unknown> => sourceJson(url, fetchFn, AbortSignal.any([budget, AbortSignal.timeout(15000)]));
   try {
     const ids = parseSteamSearch(await request("https://store.steampowered.com/search/results/?maxprice=free&specials=1&infinite=1&cc=id"));
     const games: GameRow[] = [];

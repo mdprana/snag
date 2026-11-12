@@ -5,6 +5,7 @@ import { getSession } from "@/src/lib/session";
 import { NotifPrefsInput } from "@/src/lib/schemas";
 import { hit } from "@/src/lib/ratelimit";
 import { sha256 } from "@/src/lib/crypto";
+import { boundedJson } from "@/src/lib/request";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const forbidden = assertSameOrigin(request);
@@ -26,7 +27,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const limit = await hit(db(), `push-mutation:${sha256(session.userId)}`, 30, 60);
   if (!limit.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
-  const parsed = NotifPrefsInput.safeParse(await request.json().catch(() => null));
+  const parsed = NotifPrefsInput.safeParse(await boundedJson(request));
   if (!parsed.success) return NextResponse.json({ error: "Invalid preferences" }, { status: 400 });
   const stores = [parsed.data.epic && "epic", parsed.data.steam && "steam"].filter(Boolean).join(",");
   const result = await db().execute({ sql: "UPDATE push_subs SET stores = ? WHERE id = ? AND user_id = ?", args: [stores, (await params).id, session.userId] });

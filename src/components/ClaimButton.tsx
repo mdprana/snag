@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FeedGame } from "@/src/lib/games";
 import { safeOutboundUrl, steamDeepLink } from "@/src/lib/urls";
+import { offerState } from "@/src/lib/offers";
 
 export function ClaimButton({ game, signedIn = false }: { game: FeedGame; signedIn?: boolean }): React.ReactElement | null {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   if (game.upcoming) return null;
-  const active = !game.endsAt || game.endsAt > new Date().getTime();
+  const active = offerState(game) === "active";
   const storeUrl = safeOutboundUrl(game.storeUrl);
   const href = game.store === "steam" && game.kind === "free_to_keep" && /^\d+$/.test(game.externalId)
     ? steamDeepLink(Number(game.externalId)) : safeOutboundUrl(game.claimUrl);

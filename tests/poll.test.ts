@@ -9,9 +9,47 @@ vi.mock("@/src/sources/epic.ts", () => ({ fetchEpic: vi.fn() }));
 vi.mock("@/src/sources/steamstore.ts", () => ({ fetchSteamStore: vi.fn(async () => []) }));
 vi.mock("@/src/sources/gamerpower.ts", () => ({ fetchGamerPower: vi.fn(async () => []) }));
 import { fetchEpic } from "@/src/sources/epic";
+import { fetchSteamStore } from "@/src/sources/steamstore";
+import { fetchGamerPower } from "@/src/sources/gamerpower";
+import { parseEpicMetadata, readMetadata } from "@/src/lib/metadata";
+
+it("persists Epic metadata without extra pushes and isolates metadata failure from offers", async () => {
+  const db = await setup();
+  const metadata = parseEpicMetadata({ id: "offer", namespace: "ns", description: "Summary", keyImages: [] }, "offer", "ns", 100);
+  vi.mocked(fetchEpic).mockResolvedValue([{ ...game, metadata, providerNamespace: "ns" }]);
+  const send = vi.fn(async () => "ok" as const);
+  await runPoll({ db, send });
+  const id = String((await db.execute("SELECT id FROM games")).rows[0].id);
+  expect((await readMetadata(db, id))?.aboutText).toBe("Summary");
+  await runPoll({ db, send });
+  expect(send).toHaveBeenCalledTimes(1);
+  await db.execute("DROP TABLE game_metadata");
+  expect((await runPoll({ db, send }))[0].ok).toBe(true);
+  db.close();
+});
 
 const game = { store: "epic" as const, externalId: "offer", kind: "free_to_keep" as const, title: "Fixture", storeUrl: "https://store.epicgames.com/en-US/p/fixture", claimUrl: "https://store.epicgames.com/purchase?offers=fixture", imageUrl: "", startsAt: 1, endsAt: Date.UTC(2026, 10, 13, 1), upcoming: false };
-afterEach(() => vi.clearAllMocks());
+afterEach(() => { vi.clearAllMocks(); vi.mocked(fetchSteamStore).mockResolvedValue([]); vi.mocked(fetchGamerPower).mockResolvedValue([]); });
+it("reconciles missing offers only for independently successful source, preserving claims and IDs", async () => {
+  const db = await testDb();
+  vi.mocked(fetchEpic).mockResolvedValue([]);
+  const steam = { ...game, store: "steam" as const, externalId: "123", startsAt: null, endsAt: null };
+  vi.mocked(fetchSteamStore).mockResolvedValue([steam]);
+  vi.mocked(fetchGamerPower).mockRejectedValue(new Error("offline"));
+  await runPoll({ db, now: new Date(100) });
+  const id = (await db.execute("SELECT id FROM games")).rows[0].id;
+  await db.execute("INSERT INTO users(id) VALUES('owner')");
+  await db.execute({ sql: "INSERT INTO claims(user_id,game_id) VALUES('owner',?)", args: [id] });
+  vi.mocked(fetchSteamStore).mockRejectedValue(new Error("partial"));
+  await runPoll({ db, now: new Date(200) });
+  expect((await db.execute("SELECT ends_at FROM games")).rows[0].ends_at).toBeNull();
+  vi.mocked(fetchSteamStore).mockResolvedValue([]);
+  await runPoll({ db, now: new Date(300) });
+  expect((await db.execute("SELECT id,ends_at FROM games")).rows[0]).toMatchObject({ id, ends_at: 300 });
+  expect((await db.execute("SELECT * FROM claims")).rows).toHaveLength(1);
+  db.close();
+});
+
 async function setup(upcoming = false) {
   const db = await testDb();
   await db.execute("INSERT INTO users(id,tz) VALUES('reader','America/Los_Angeles')");

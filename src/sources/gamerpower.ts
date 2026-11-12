@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sourceJson } from "./http.ts";
 import { safeImageUrl, safeOutboundUrl } from "../lib/urls.ts";
 import { type GameRow, SourceError } from "./epic.ts";
 
@@ -38,14 +39,7 @@ export function parseGamerPower(json: unknown, now: Date): GameRow[] {
 
 export async function fetchGamerPower(fetchFn: typeof fetch = fetch): Promise<GameRow[]> {
   try {
-    const response = await fetchFn("https://www.gamerpower.com/api/giveaways?platform=steam&type=game", {
-      signal: AbortSignal.timeout(15000), cache: "no-store",
-    });
-    if (!response.ok) throw new SourceError(`GamerPower HTTP ${response.status}`);
-    if (response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") {
-      throw new SourceError("GamerPower response is not JSON");
-    }
-    return parseGamerPower(await response.json(), new Date());
+    return parseGamerPower(await sourceJson("https://www.gamerpower.com/api/giveaways?platform=steam&type=game", fetchFn), new Date());
   } catch (error) {
     if (error instanceof SourceError) throw error;
     throw new SourceError("GamerPower request failed", { cause: error });

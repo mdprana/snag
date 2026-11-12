@@ -94,6 +94,17 @@ describe("Steam store", () => {
 });
 
 describe("Steam source requests", () => {
+  it("rejects oversized streamed JSON and redirect responses without processing offers", async () => {
+    for (const source of [fetchGamerPower, fetchSteamStore]) {
+      await expect(source(vi.fn<typeof fetch>().mockResolvedValue(new Response(' '.repeat(1048577), { headers: { 'content-type': 'application/json' } })))).rejects.toThrow(/large/i);
+      await expect(source(vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 302, headers: { location: 'https://evil.test' } })))).rejects.toThrow(SourceError);
+    }
+  });
+  it("rejects truncated Steam search before querying any details", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ success: 1, results_html: Array.from({ length: 51 }, (_, i) => `<a data-ds-appid=\"${i + 1}\"></a>`).join('') }));
+    await expect(fetchSteamStore(fetchFn)).rejects.toThrow(/limit|truncat/i);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
   it("fetches both sources with 15 second timeouts and no cache", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(now);
@@ -106,8 +117,8 @@ describe("Steam source requests", () => {
       "https://store.steampowered.com/search/results/?maxprice=free&specials=1&infinite=1&cc=id",
       "https://store.steampowered.com/api/appdetails?appids=123&cc=id",
     ]);
-    for (const [, options] of fetchFn.mock.calls) expect(options).toEqual({ signal: expect.any(AbortSignal), cache: "no-store" });
-    expect(timeout).toHaveBeenCalledTimes(3);
+    for (const [, options] of fetchFn.mock.calls) expect(options).toEqual({ signal: expect.any(AbortSignal), cache: "no-store", redirect: "error" });
+    expect(timeout).toHaveBeenCalledTimes(4);
     expect(timeout).toHaveBeenCalledWith(15000);
     timeout.mockRestore();
   });
