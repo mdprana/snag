@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/src/lib/db";
 import { assertSameOrigin } from "@/src/lib/origin";
 import { getSession } from "@/src/lib/session";
+import { NotifPrefsInput } from "@/src/lib/schemas";
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const forbidden = assertSameOrigin(request);
@@ -14,4 +15,16 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   return NextResponse.json({ ok: true });
 }
 
-export function GET(): Response { return new Response(null, { status: 405, headers: { Allow: "DELETE" } }); }
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+  const forbidden = assertSameOrigin(request);
+  if (forbidden) return forbidden;
+  const session = await getSession(db(), request.headers.get("cookie"));
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const parsed = NotifPrefsInput.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: "Invalid preferences" }, { status: 400 });
+  const stores = [parsed.data.epic && "epic", parsed.data.steam && "steam"].filter(Boolean).join(",");
+  const result = await db().execute({ sql: "UPDATE push_subs SET stores = ? WHERE id = ? AND user_id = ?", args: [stores, (await params).id, session.userId] });
+  return result.rowsAffected ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+export function GET(): Response { return new Response(null, { status: 405, headers: { Allow: "DELETE, PATCH" } }); }

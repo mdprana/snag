@@ -1,0 +1,3 @@
+export function InstallGuide(): React.ReactElement {
+  return <section className="space-y-3"><h2 className="text-xl font-semibold">Install Snag</h2><ol className="list-inside list-decimal space-y-3"><li>Open Snag in Safari.</li><li>Tap Share <svg aria-label="Share" role="img" viewBox="0 0 24 24" className="inline size-6" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 16V2m-5 5 5-5 5 5M5 10H3v12h18V10h-2" /></svg>, then Add to Home Screen.</li><li>Open Snag from your Home Screen to enable notifications.</li></ol><p>Requires iOS 16.4 or later. On other devices, install Snag from your browser menu.</p></section>;
+}
