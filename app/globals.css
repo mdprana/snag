@@ -1,8 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --color-bg: #0b0a09;
+  --color-surface: #161412;
+  --color-line: #2a2622;
+  --color-ink: #e7e0d6;
+  --color-ink-dim: #a39b90;
+  --color-signal: #ff5a3c;
+  --color-signal-ink: #0b0a09;
+  --color-epic: #e7e0d6;
+  --color-steam: #66c0f4;
+  --color-ok: #7bd389;
+  --font-display: "Saira", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-media: 8px;
+  --radius-control: 0px;
+  --ease-out-snag: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-inout-snag: cubic-bezier(0.44, 0, 0.56, 1);
+}
+
 :root {
-  --background: #0b0a09;
-  --foreground: #f5f2ee;
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
 }
 
 @theme inline {
@@ -13,7 +33,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
 }
 
 .landing-count {
@@ -146,10 +166,51 @@ body {
   overflow-wrap: normal;
 }
 
-.landing a:focus-visible,
-.public-prose a:focus-visible {
+:focus-visible {
   outline: 2px solid #ff5a3c;
   outline-offset: 2px;
+}
+
+a[href], button, input, select {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+h3 a[href] {
+  display: inline-flex;
+  align-items: center;
+}
+
+h1, h2, h3, .landing-count {
+  font-family: var(--font-display);
+}
+
+.entry-motion {
+  animation: snag-entry 0.5s var(--ease-out-snag) both;
+}
+
+.entry-motion:nth-child(2) { animation-delay: 0.04s; }
+.entry-motion:nth-child(3) { animation-delay: 0.08s; }
+.entry-motion:nth-child(4) { animation-delay: 0.12s; }
+.entry-motion:nth-child(5) { animation-delay: 0.16s; }
+.entry-motion:nth-child(n+6) { animation-delay: 0.2s; }
+
+button:active:not(:disabled), .claim-action:active {
+  transform: scale(0.97);
+}
+
+@keyframes snag-entry {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entry-motion {
+    animation: none;
+  }
+  button:active:not(:disabled), .claim-action:active {
+    transform: none;
+  }
 }
 
 @media (min-width: 768px) {

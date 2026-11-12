@@ -21,8 +21,8 @@ export async function sendToSub(db: Client, sub: PushSub, payload: PushPayload):
   }
 }
 
-export function notificationText(game: { store: string; title: string; endsAt: number }, timeZone: string): { title: string; body: string } {
+export function notificationText(game: { store: string; title: string; endsAt: number | null }, timeZone: string): { title: string; body: string } {
   const store = game.store === "epic" ? "Epic" : "Steam";
-  const date = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone }).format(new Date(game.endsAt));
+  const date = game.endsAt === null ? "further notice" : new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone }).format(new Date(game.endsAt));
   return { title: `Free on ${store}: ${game.title}`, body: `Yours to keep until ${date}. Tap to claim.` };
 }

@@ -33,7 +33,7 @@ Discover an offer, check its claim window, and open the store to keep it. Snag b
 - **Configuration validation** and sensitive-field redaction in logs.
 - **Public landing page**, database-backed game feed and game detail pages, with claim links and per-account claim tracking.
 - **Offer polling** for Epic, Steam and GamerPower, with last-known data retained on source errors. An external scheduler must invoke the protected cron route; the app does not schedule itself.
-- **Steam sign-in**, optional Epic sign-in, linked accounts, logout and account deletion. Provider login remains unverified live; Epic login is disabled by default.
+- **Steam sign-in**, optional Epic sign-in, logout and account deletion. Provider login remains unverified live; Epic login is disabled by default.
 - **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Browser push delivery remains unverified live, including iPhone Home Screen behavior.
 - **Privacy and self-host pages**. Optional third-party claiming tools are separate from Snag; their examples have not been tested as a deployment.
 - **Automated unit and browser tests** using local data and provider fixtures, not live account credentials.
@@ -107,7 +107,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable database in `.work/` and starts local HTTPS on port 3100.
+Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable fixture database and starts local HTTPS on port 3100.
 
 Additional dependency and secret checks:
 
