@@ -1,4 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
+import { getImageProps } from "next/image";
 
-export function Logo(): React.ReactElement { return <Link href="/" className="inline-flex min-h-11 items-center"><Image src="/logo.svg" alt="Snag" width={96} height={32} /></Link>; }
+export function Logo(): React.ReactElement {
+  const { props } = getImageProps({ src: "/logo.svg", alt: "Snag", width: 96, height: 32, loading: "eager" });
+  return <Link href="/" className="inline-flex min-h-11 items-center"><img {...props} alt="Snag" style={undefined} /></Link>;
+}

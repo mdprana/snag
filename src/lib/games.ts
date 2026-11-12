@@ -35,3 +35,12 @@ export async function getGame(db: Client, id: string): Promise<FeedGame | null> 
   const result = await db.execute({ sql: "SELECT *, 0 AS claimed FROM games WHERE id = ?", args: [id] });
   return result.rows[0] ? game(result.rows[0] as Record<string, unknown>) : null;
 }
+
+export function soonestEnding(games: FeedGame[]): FeedGame | null {
+  return games.reduce<FeedGame | null>((best, item) => item.endsAt !== null && (!best || item.endsAt < best.endsAt!) ? item : best, null);
+}
+
+export async function lastPoll(db: Client): Promise<number | null> {
+  const result = await db.execute("SELECT MAX(at) AS at FROM poll_runs WHERE ok = 1");
+  return result.rows[0]?.at == null ? null : Number(result.rows[0].at);
+}

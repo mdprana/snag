@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
-for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000 }]) {
+for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1440, height: 1000 }]) {
   test.describe(`${viewport.width}x${viewport.height}`, () => {
     test.use({ viewport });
     for (const [name, path] of [["landing", "/"], ["feed", "/feed"], ["detail", "/g/active"]]) {
@@ -14,10 +15,15 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1440, height: 1000
         await page.getByRole("heading", { level: 1 }).waitFor();
         if (name === "feed") await expect(page.locator(".entry-motion").first()).toHaveCSS("animation-duration", "0.5s");
         await page.emulateMedia({ reducedMotion: "reduce" });
-        if (name === "feed") await expect(page.locator(".entry-motion").first()).toHaveCSS("animation-name", "none");
+        if (name === "feed") await expect(page.locator(".entry-motion").first()).toHaveCSS("animation-name", "fade");
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
-        await page.screenshot({ path: `.work/screenshots/${name}-${viewport.width}x${viewport.height}.png`, fullPage: true, animations: "disabled" });
-        if (name === "landing") return;
+        await page.screenshot({ path: `.work/screenshots/fixture-${name}-${viewport.width}x${viewport.height}.png`, fullPage: true, animations: "disabled" });
+        await page.evaluate(readFileSync(".work/node_modules/axe-core/axe.min.js", "utf8"));
+        const violations = await page.evaluate(async () => {
+          const axe = (window as unknown as { axe: { run: (options: object) => Promise<{ violations: unknown[] }> } }).axe;
+          return (await axe.run({ runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa"] } })).violations;
+        });
+        expect(violations).toEqual([]);
         const controls = page.locator("main").locator("a[href], button, input, select");
         for (const control of await controls.all()) {
           if (!await control.isVisible()) continue;

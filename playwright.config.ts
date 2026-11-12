@@ -10,8 +10,17 @@ await database.executeMultiple(readFileSync("db/migrations/001_init.sql", "utf8"
 const now = Date.now();
 await database.execute("INSERT INTO users(id) VALUES('reader')");
 await database.execute({ sql: "INSERT INTO sessions VALUES(?, 'reader', ?, ?)", args: [createHash("sha256").update("e2e-session-only").digest("hex"), now, now + 86400000] });
-for (const [id, kind, upcoming] of [["active", "free_to_keep", 0], ["next", "free_to_keep", 1], ["key", "key_giveaway", 0]] as const) {
-  await database.execute({ sql: "INSERT INTO games VALUES(?, 'epic', ?, ?, ?, ?, ?, '', ?, ?, ?, ?)", args: [id, id, kind, `Game ${id}`, `https://store.epicgames.com/en-US/p/${id}`, `https://store.epicgames.com/purchase?offers=${id}`, upcoming ? now + 86400000 : now - 1000, now + 3 * 86400000, upcoming, now] });
+// Test-only fictional offers for local e2e and preview screenshots. Never seeded outside .work/feed-e2e.db; empty image_url renders local neutral art.
+const FIXTURE_GAMES = [
+  ["active", "epic", "active", "free_to_keep", "Lantern Harbor", 0],
+  ["steam-active", "steam", "2400100", "free_to_keep", "Copperline Rally", 0],
+  ["next", "epic", "next", "free_to_keep", "Hollow Orchard", 1],
+  ["key", "epic", "key", "key_giveaway", "Starfall Cartographers: Expedition Edition Founder's Pack", 0],
+] as const;
+for (const [id, store, externalId, kind, title, upcoming] of FIXTURE_GAMES) {
+  const storeUrl = store === "steam" ? `https://store.steampowered.com/app/${externalId}/` : `https://store.epicgames.com/en-US/p/${id}`;
+  const claimUrl = kind === "key_giveaway" ? `https://www.gamerpower.com/${id}` : store === "steam" ? storeUrl : `https://store.epicgames.com/purchase?offers=${id}`;
+  await database.execute({ sql: "INSERT INTO games VALUES(?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)", args: [id, store, externalId, kind, title, storeUrl, claimUrl, upcoming ? now + 86400000 : now - 1000, now + 3 * 86400000, upcoming, now] });
 }
 await database.execute({ sql: "INSERT INTO poll_runs(source,ok,at) VALUES('epic',1,?)", args: [now - 91 * 60000] });
 database.close();

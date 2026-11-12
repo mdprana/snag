@@ -24,10 +24,10 @@ export function ClaimButton({ game, signedIn = false }: { game: FeedGame; signed
     } catch { setError("Could not save claim. Try again."); }
     finally { setPending(false); }
   }
-  return <div className="flex shrink-0 flex-col gap-2">
-    {!game.claimed && active && href && <a href={href} target="_blank" rel="noreferrer" className="claim-action min-h-11 bg-signal px-3 py-3 text-center text-sm font-semibold uppercase text-signal-ink">{game.kind === "key_giveaway" ? "Get key on GamerPower" : "Claim"}</a>}
-    {!game.claimed && storeUrl && game.store === "steam" && game.kind === "free_to_keep" && <a href={storeUrl} className="min-h-11 py-3 text-sm underline">Open Steam website</a>}
-    {signedIn ? <button type="button" disabled={pending} aria-pressed={game.claimed} className="min-h-11 text-sm underline disabled:opacity-50" onClick={toggle}>{game.claimed ? "Claimed · Undo" : "Mark claimed"}</button> : <a href="/login" className="min-h-11 py-3 text-sm underline">Sign in to mark claimed</a>}
+  return <div className="claim-actions">
+    {!game.claimed && active && href && <a href={href} target="_blank" rel="noreferrer" aria-label={game.kind === "key_giveaway" ? "Get key on GamerPower" : undefined} className="claim-action btn btn-signal">{game.kind === "key_giveaway" ? "Get key" : "Claim"}</a>}
+    {!game.claimed && storeUrl && game.store === "steam" && game.kind === "free_to_keep" && <a href={storeUrl} className="text-link text-sm">Open Steam website</a>}
+    {signedIn ? <button type="button" disabled={pending} aria-pressed={game.claimed} className="btn btn-ghost disabled:opacity-50" onClick={toggle}>{game.claimed ? "Claimed · Undo" : "Mark claimed"}</button> : <a href="/login" className="text-link text-sm">Sign in to mark claimed</a>}
     {error && <p role="alert" className="text-sm">{error}</p>}
   </div>;
 }
