@@ -7,7 +7,7 @@ describe("db", () => {
     const c = await testDb();
     expect(await migrate(c)).toEqual([]);
     const { rows } = await c.execute("SELECT name FROM _migrations");
-    expect(rows.map((r) => r.name)).toEqual(["001_init.sql"]);
+    expect(rows.map((r) => r.name)).toEqual(["001_init.sql", "002_poll_runs.sql"]);
   });
 
   it("deleting user cascades to identities, sessions, claims, push_subs", async () => {

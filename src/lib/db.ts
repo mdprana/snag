@@ -1,5 +1,5 @@
 import { createClient, type Client } from "@libsql/client";
-import { readdirSync, readFileSync } from "node:fs";
+const { readdirSync, readFileSync } = process.getBuiltinModule("node:fs");
 import { join } from "node:path";
 import { env } from "./env.ts";
 import { log } from "./log.ts";
@@ -18,11 +18,11 @@ export async function migrate(c: Client, dir = join(process.cwd(), "db/migration
   await c.execute("CREATE TABLE IF NOT EXISTS _migrations(name TEXT PRIMARY KEY, applied_at INT)");
   const done = new Set((await c.execute("SELECT name FROM _migrations")).rows.map((r) => String(r.name)));
   const applied: string[] = [];
-  for (const name of readdirSync(dir).filter((f) => f.endsWith(".sql")).sort()) {
+  for (const name of readdirSync(/* turbopackIgnore: true */ dir).filter((f) => f.endsWith(".sql")).sort()) {
     if (done.has(name)) continue;
     const tx = await c.transaction("write");
     try {
-      await tx.executeMultiple(readFileSync(join(dir, name), "utf8"));
+      await tx.executeMultiple(readFileSync(/* turbopackIgnore: true */ join(/* turbopackIgnore: true */ dir, name), "utf8"));
       await tx.execute({ sql: "INSERT INTO _migrations(name, applied_at) VALUES(?, ?)", args: [name, Date.now()] });
       await tx.commit();
     } finally {

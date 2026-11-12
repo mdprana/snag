@@ -1,0 +1,6 @@
+[Unit]
+Description=Snag poll worker
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/curl -fsS -X POST -H @/home/ubuntu/snag/.cron-header https://snag.example/api/cron/poll
