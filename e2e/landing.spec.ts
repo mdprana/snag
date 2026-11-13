@@ -55,6 +55,16 @@ for (const width of [390, 1440]) {
       };
     });
     expect(grouping).toEqual({ artOwned: true, titleOwned: true, noOverlap: true, titleFits: true, distinctArt: true });
+    const backTitle = page.locator(".cover-title").nth(1);
+    await expect(backTitle).toBeVisible();
+    expect(await backTitle.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest("a") === element.closest("a");
+    })).toBe(true);
+    const icon = page.locator(".cover-labels button").first();
+    await expect(icon).toHaveCSS("width", "44px");
+    await expect(icon.locator("svg")).toHaveCSS("width", "24px");
+    await expect(page.getByRole("link", { name: "Set up notifications" })).toHaveClass(/btn-ghost/);
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.reload();
     const title = page.locator(".cover-title").first();

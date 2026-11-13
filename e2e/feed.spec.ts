@@ -23,7 +23,7 @@ test("mark claimed collapses row", async ({ page }) => {
 });
 test("stale banner states last successful check time", async ({ page }) => {
   const status = page.getByRole("status");
-  await expect(status).toContainText("Updates delayed. Last successful check");
+   await expect(status).toContainText("Availability may be outdated. Last checked");
   await expect(status.locator("time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}T/);
   await expect(status).not.toContainText(" or ");
 });

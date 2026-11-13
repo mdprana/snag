@@ -34,8 +34,8 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         <div className="detail-title"><h1 className="page-title">{game.title}</h1><div className="detail-labels"><StoreBadge store={game.store} /><PlatformLabels platforms={game.platforms} /></div></div>
         {game.upcoming ? <p>Coming next{game.startsAt && <>: starts <UtcTime at={game.startsAt} /></>}. Claiming opens when this giveaway starts.</p>
           : ended ? <p className="dim">Offer ended <UtcTime at={game.endsAt!} />.</p>
-          : game.endsAt && <p className="dim"><Countdown endsAt={game.endsAt} now={now.getTime()} /> · <UtcTime at={game.endsAt} /></p>}
-        {stale && <p role="status" className="banner">Availability updates delayed. {checked === null ? "No successful availability check yet; this offer is unconfirmed." : <>Last successful availability check <UtcTime at={checked} />.</>} Showing last-known offers; availability may have changed.</p>}
+          : game.endsAt && <p className="dim">Ends in <Countdown endsAt={game.endsAt} now={now.getTime()} /> · <UtcTime at={game.endsAt} /></p>}
+        {stale && <p role="status" className="banner banner-warning"><span className="warning-icon" aria-hidden="true">!</span>Availability may be outdated. Last checked {checked === null ? "never." : <><UtcTime at={checked} />.</>}</p>}
         {game.kind === "key_giveaway" && <p className="banner">This giveaway needs a third-party account.</p>}
         <p className="dim">Availability varies by region.</p>
         <div className="detail-bar"><ClaimButton game={game} signedIn={Boolean(session)} /></div>
@@ -48,7 +48,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           <dl className="metadata-list">
             <div><dt>Developer</dt><dd>{metadata.developer || missing}</dd></div>
             <div><dt>Publisher</dt><dd>{metadata.publisher || missing}</dd></div>
-            <div><dt>Platforms</dt><dd>{metadata.platforms?.length ? <PlatformLabels platforms={metadata.platforms} /> : missing}</dd></div>
+            {!!metadata.platforms?.length && <div><dt>Platforms</dt><dd><PlatformLabels platforms={metadata.platforms} /></dd></div>}
             <div><dt>Source</dt><dd>{metadata.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
             <div><dt>Last checked</dt><dd><UtcTime at={metadata.fetchedAt} /></dd></div>
           </dl>
