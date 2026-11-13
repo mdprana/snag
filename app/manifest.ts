@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
-  return { name: "Snag", display: "standalone", start_url: "/feed", theme_color: "#0b0a09", icons: [{ src: "/logo.svg", sizes: "192x192", type: "image/svg+xml" }, { src: "/logo.svg", sizes: "512x512", type: "image/svg+xml" }] };
+  return { name: "Snag", display: "standalone", start_url: "/feed", theme_color: "#0b0a09", background_color: "#20211F", icons: [{ src: "/brand/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/brand/icon-512.png", sizes: "512x512", type: "image/png" }, { src: "/brand/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }] };
 }

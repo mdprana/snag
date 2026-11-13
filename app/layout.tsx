@@ -9,6 +9,7 @@ const body = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "700"],
 export const metadata: Metadata = {
   title: "Snag",
   description: "Free games on Epic and Steam, one tap to claim.",
+  icons: { apple: "/brand/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = { themeColor: "#0b0a09", viewportFit: "cover" };
