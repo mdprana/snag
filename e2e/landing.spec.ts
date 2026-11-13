@@ -90,21 +90,27 @@ test("production CSP stays clean through slides, reveals, tooltips and gallery",
     (window as unknown as { recordCspViolation: (value: string) => void }).recordCspViolation(`${event.effectiveDirective}: ${event.blockedURI} ${event.sourceFile}:${event.lineNumber}`);
   }));
   await page.goto("/");
-  await page.getByRole("button", { name: "Next game" }).click();
-  await expect(page.locator(".cover-title")).toHaveText("Copperline Rally");
-  await page.getByRole("button", { name: "Previous game" }).click();
-  await expect(page.locator(".cover-title")).toHaveText("Lantern Harbor");
+  await expect(page.locator(".cover-controls")).toHaveCount(0);
   const height = await page.evaluate(() => document.documentElement.scrollHeight);
   for (let y = 0; y < height; y += 400) {
     await page.evaluate(top => scrollTo(0, top), y);
     await page.waitForTimeout(150);
   }
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(300);
   await expect(page.locator(".reveal-item")).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Hollow Orchard", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Set up notifications" })).toBeVisible();
   expect(await page.locator(".section").first().evaluate(element => getComputedStyle(element).backgroundImage)).toBe("none");
   await expect(page.locator(".site-footer")).toHaveCSS("border-top-width", "0px");
   await expect(page.locator(".game-row").first()).toHaveCSS("border-bottom-width", "1px");
+  const stage = page.locator(".cover-stage");
+  const nextCover = stage.locator(".cover").nth(1);
+  await nextCover.locator("a").focus();
+  await expect(nextCover).toHaveCSS("z-index", "4");
+  await nextCover.locator("a").blur();
+  await page.mouse.move(0, 0);
+  await expect(stage.locator(".cover").first()).toHaveCSS("z-index", "3");
   await page.goto("/g/steam-active");
   const platform = page.locator(".metadata-list").getByRole("button", { name: "Windows", exact: true });
   await platform.focus();
@@ -158,33 +164,25 @@ for (const width of [390, 1440]) {
     await page.goto("/");
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(1800);
-    await expect(page.locator(".cover")).toHaveCount(1);
     const front = page.locator(".cover").first();
     const grouping = await front.evaluate(element => {
-      const link = element.querySelector("a")!;
+      const link = element.querySelector<HTMLAnchorElement>(".cover-link")!;
       const art = link.querySelector<HTMLElement>(".game-art")!;
       const caption = link.querySelector<HTMLElement>(".cover-caption")!;
       const title = link.querySelector<HTMLElement>(".cover-title")!;
-      const ownsPoint = (target: Element, x: number, y: number) => {
-        const box = target.getBoundingClientRect();
-        return document.elementFromPoint(box.x + box.width * x, box.y + box.height * y)?.closest("a") === link;
-      };
       return {
-        artOwned: [0.2, 0.5, 0.8].every(x => [0.2, 0.5, 0.8].every(y => ownsPoint(art, x, y))),
-        titleOwned: ownsPoint(title, 0.5, 0.5),
-        noOverlap: caption.offsetTop >= art.offsetTop + art.offsetHeight - 1,
+        artOwned: art.closest("a") === link,
+        titleOwned: title.closest("a") === link,
+        noOverlap: caption.getBoundingClientRect().top >= art.getBoundingClientRect().bottom - 1,
         titleFits: title.scrollWidth <= title.clientWidth && title.scrollHeight <= caption.clientHeight,
-        distinctArt: element.parentElement!.querySelectorAll(".game-art").length === 1,
+        distinctCards: element.parentElement!.querySelectorAll(".cover-fan").length === 2,
       };
     });
-    expect(grouping).toEqual({ artOwned: true, titleOwned: true, noOverlap: true, titleFits: true, distinctArt: true });
-    await page.getByRole("button", { name: "Next game" }).click();
-    const backTitle = page.locator(".cover-title");
+    expect(grouping).toEqual({ artOwned: true, titleOwned: true, noOverlap: true, titleFits: true, distinctCards: true });
+    const nextCover = page.locator(".cover").nth(1);
+    await nextCover.hover({ position: { x: 8, y: 8 }, force: true });
+    const backTitle = nextCover.locator(".cover-title");
     await expect(backTitle).toHaveText("Copperline Rally");
-    expect(await backTitle.evaluate(element => {
-      const box = element.getBoundingClientRect();
-      return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest("a") === element.closest("a");
-    })).toBe(true);
     const icon = page.locator(".cover-labels button").first();
     await expect(icon).toHaveCSS("width", "44px");
     await expect(icon.locator("svg")).toHaveCSS("width", "24px");
@@ -197,65 +195,80 @@ for (const width of [390, 1440]) {
   });
 }
 
-test("manual covers clamp boundaries, sync navigation, swipe and reduced motion", async ({ page }) => {
-  await page.goto("/");
-  const stage = page.getByRole("region", { name: "Featured games" });
-  const previous = stage.getByRole("button", { name: "Previous game" });
-  const next = stage.getByRole("button", { name: "Next game" });
-  await expect(previous).toBeDisabled();
-  await expect(stage).toContainText("1 / 2");
-  await next.click();
-  await expect(next).toBeDisabled();
-  await expect(stage.locator("a")).toHaveAttribute("href", "/g/steam-active");
-  await expect(stage).toContainText("2 / 2");
-  await stage.focus();
-  await page.keyboard.press("ArrowLeft");
-  await expect(stage.locator("a")).toHaveAttribute("href", "/g/active");
-  await page.keyboard.press("ArrowLeft");
-  await expect(previous).toBeDisabled();
-  const swipe = async (x: number, y: number, cancel = false) => {
-    await stage.dispatchEvent("pointerdown", { pointerId: 1, isPrimary: true, button: 0, clientX: 180, clientY: 180 });
-    await stage.dispatchEvent(cancel ? "pointercancel" : "pointerup", { pointerId: 1, isPrimary: true, clientX: x, clientY: y });
-  };
-  await swipe(100, 185, true);
-  await swipe(170, 80);
-  await swipe(175, 180);
-  await expect(previous).toBeDisabled();
-  await swipe(100, 185);
-  await expect(next).toBeDisabled();
-  await stage.locator("a").dispatchEvent("click");
-  await expect(page).toHaveURL(/\/$/);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await previous.click();
-  expect(await stage.locator(".cover").evaluate(e => e.getAnimations({ subtree: true }).length)).toBe(0);
-  await page.waitForTimeout(6500);
-  await expect(stage).toContainText("1 / 2");
-  await expect(stage.locator(".cover-link")).toHaveCount(1);
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  await next.click();
-  await page.evaluate(() => {
-    Object.defineProperty(document, "hidden", { configurable: true, value: true });
-    document.dispatchEvent(new Event("visibilitychange"));
+type Box = { x: number; y: number; width: number; height: number };
+const near = (a: Box, b: Box, tolerance: number) => (["x", "y", "width", "height"] as const).every(key => Math.abs(a[key] - b[key]) <= tolerance);
+const fanBoxes = (page: import("@playwright/test").Page) => page.evaluate(async () => {
+  await new Promise(resolve => setTimeout(resolve, 400));
+  await Promise.all(document.getAnimations().filter(animation => animation.effect?.getComputedTiming().endTime !== Infinity).map(animation => animation.finished.catch(() => undefined)));
+  const origin = document.querySelector(".cover-stack")!.getBoundingClientRect();
+  return [...document.querySelectorAll<HTMLElement>(".cover")].map(cover => {
+    const { x, y, width, height } = cover.querySelector(".cover-fan")!.getBoundingClientRect();
+    return { x: x - origin.x, y: y - origin.y, width, height, z: Number(getComputedStyle(cover).zIndex) };
   });
-  expect(await stage.locator(".cover").evaluate(e => e.getAnimations().length)).toBe(0);
-  await stage.dispatchEvent("keydown", { key: "ArrowLeft" });
-  await expect(stage).toContainText("2 / 2");
-  await page.evaluate(() => { Object.defineProperty(document, "hidden", { configurable: true, value: false }); });
-  await page.getByRole("contentinfo").scrollIntoViewIfNeeded();
-  await page.waitForTimeout(100);
-  await stage.dispatchEvent("keydown", { key: "ArrowLeft" });
-  await expect(stage).toContainText("2 / 2");
-  await stage.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(100);
-  await previous.click();
-  await next.click();
-  await previous.click();
-  await expect(stage).toContainText("1 / 2");
-  for (const button of [previous, next]) {
-    const box = await button.boundingBox();
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
-  }
+});
+
+for (const width of [390, 1440]) test(`hero fan promotes hovered or focused cover to the front and returns at ${width}px`, async ({ page }, testInfo) => {
+  const violations: string[] = [];
+  await page.exposeFunction("recordFanCsp", (value: string) => violations.push(value));
+  await page.addInitScript(() => document.addEventListener("securitypolicyviolation", event => (window as unknown as { recordFanCsp: (value: string) => void }).recordFanCsp(`${event.effectiveDirective}: ${event.blockedURI}`)));
+  await page.setViewportSize({ width, height: 1000 });
+  await page.mouse.move(0, 0);
+  await page.goto("/");
+  const stage = page.locator(".cover-stage");
+  await expect(stage).toHaveAttribute("data-count", "2");
+  await expect(stage.locator(".cover")).toHaveCount(2);
+  await expect(page.getByRole("button", { name: /Previous|Next/ })).toHaveCount(0);
+  await expect(stage.locator(".cover-controls")).toHaveCount(0);
+  await expect(stage.locator("[style]:not(.cover-stage, .cover-float, .cover-fan)")).toHaveCount(0);
+  await page.waitForTimeout(1000);
+  const before = await fanBoxes(page);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const stageBox = (await stage.boundingBox())!;
+  const clip = { x: Math.max(0, stageBox.x - 24), y: Math.max(0, stageBox.y - 24), width: Math.min(width - Math.max(0, stageBox.x - 24), stageBox.width + 48), height: stageBox.height + 48 };
+  await page.screenshot({ path: `.work/screenshots/hero-fan-initial-${width}.png`, clip });
+  const back = stage.locator(".cover").nth(1);
+  const point = await back.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    for (let y = box.top + 4; y < box.bottom; y += 2) for (let x = box.left + 4; x < box.right; x += 2) if (element.contains(document.elementFromPoint(x, y))) return { x, y };
+    throw new Error("back cover not exposed");
+  });
+  await page.mouse.move(point.x, point.y);
+  const samples: boolean[] = [];
+  for (let i = 0; i < 10; i++) { samples.push(await back.evaluate(element => element.matches(":hover"))); await page.waitForTimeout(100); }
+  expect(samples.every(Boolean)).toBe(true);
+  const hovered = await fanBoxes(page);
+  expect(near(hovered[1], before[0], 3)).toBe(true);
+  expect(hovered[1].z).toBe(Math.max(...hovered.map(box => box.z)));
+  expect(hovered[1].z).toBeGreaterThan(hovered[0].z);
+  expect(near(hovered[0], before[1], 3)).toBe(true);
+  await expect(back.locator(".cover-labels")).toBeVisible();
+  await expect(stage.locator(".cover").first().locator(".cover-labels")).toBeHidden();
+  await page.screenshot({ path: `.work/screenshots/hero-fan-hover-${width}.png`, clip });
+  await page.mouse.move(0, 0);
+  const after = await fanBoxes(page);
+  for (const index of [0, 1]) expect(near(after[index], before[index], 2)).toBe(true);
+  await back.locator("a").focus();
+  const focused = await fanBoxes(page);
+  expect(near(focused[1], before[0], 3)).toBe(true);
+  expect(near(focused[0], before[1], 3)).toBe(true);
+  await back.locator("a").blur();
+  const blurred = await fanBoxes(page);
+  for (const index of [0, 1]) expect(near(blurred[index], before[index], 2)).toBe(true);
+  console.log(JSON.stringify({ width, before, hovered, after, focused, blurred, hoverSamples: samples }));
+  await testInfo.attach("fan-boxes", { body: JSON.stringify({ before, hovered, after, focused, blurred }, null, 2), contentType: "application/json" });
+  if (process.env.PLAYWRIGHT_PRODUCTION === "1") expect(violations).toEqual([]);
+});
+
+test("reduced motion hero fan swaps without sliding", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto("/");
+  const before = await fanBoxes(page);
+  await page.locator(".cover").nth(1).locator("a").focus();
+  const focused = await fanBoxes(page);
+  expect(focused[1].z).toBeGreaterThan(focused[0].z);
+  for (const index of [0, 1]) expect(near(focused[index], before[index], 2)).toBe(true);
+  expect(await page.locator(".cover-fan").first().evaluate(element => getComputedStyle(element).transitionDuration)).toBe("0s");
 });
 
 for (const width of [320, 390, 1440]) test(`document background grows without tiles at ${width}`, async ({ page }) => {
