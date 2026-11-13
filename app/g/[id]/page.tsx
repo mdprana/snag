@@ -10,6 +10,8 @@ import { ClaimButton } from "@/src/components/ClaimButton";
 import { Countdown, UtcTime } from "@/src/components/Countdown";
 import { readMetadataRecord } from "@/src/lib/metadata";
 import { ScreenshotGallery } from "@/src/components/ScreenshotGallery";
+import { DetailBar } from "@/src/components/DetailBar";
+import { DetailValue } from "@/src/components/DetailValue";
 
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession(db(), (await cookies()).toString());
@@ -23,7 +25,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     game.claimed = claim.rows.length > 0;
   }
   const about = metadata?.aboutText.trim() && metadata.aboutText.trim().toLowerCase() !== game.title.trim().toLowerCase() ? metadata.aboutText.trim() : "";
-  const sourced = metadata && (about || metadata.developer || metadata.publisher || metadata.platforms?.length || metadata.screenshots.length || metadata.trailer) ? metadata : null;
+  const sources = [...new Map(Object.values(metadata?.fieldSources ?? {}).map(source => [source.provider, source])).values()];
   const ended = game.endsAt !== null && game.endsAt <= now.getTime();
   const checked = game.confirmedAt ?? null;
   const stale = checked === null || !game.sourceOk || now.getTime() - checked > 90 * 60000;
@@ -39,21 +41,23 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         {stale && <p role="status" className="banner banner-warning"><span className="warning-icon" aria-hidden="true">!</span>Availability may be outdated. Last checked {checked === null ? "never." : <><UtcTime at={checked} />.</>}</p>}
         {game.kind === "key_giveaway" && <p className="banner">This giveaway needs a third-party account.</p>}
         <p className="dim">Availability varies by region.</p>
-        <div className="detail-bar"><ClaimButton game={game} signedIn={Boolean(session)} /></div>
+        <DetailBar><ClaimButton game={game} signedIn={Boolean(session)} /></DetailBar>
       </header>
-      {sourced && <section className="detail-meta" {...about ? { "aria-labelledby": "about-title" } : { "aria-label": "Game details" }}>
-        {about && <><h2 id="about-title">About</h2>
-          <p className="about-label">{sourced.aboutKind === "full" ? "Full description" : "Store summary"}</p>
-          <p className="about-text">{about}</p></>}
+      <section className="detail-meta" aria-labelledby="about-title">
+        <h2 id="about-title">About</h2>
+        {about && <p className="about-label">{metadata?.aboutKind === "full" ? "Full description" : "Store summary"}</p>}
+        <p className="about-text"><DetailValue value={about} /></p>
         <dl className="metadata-list">
-          {sourced.developer && <div><dt>Developer</dt><dd>{sourced.developer}</dd></div>}
-          {sourced.publisher && <div><dt>Publisher</dt><dd>{sourced.publisher}</dd></div>}
-          {!!sourced.platforms?.length && <div><dt>Platforms</dt><dd><PlatformLabels platforms={sourced.platforms} /></dd></div>}
-          <div><dt>Source</dt><dd>{sourced.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
-          <div><dt>Last checked</dt><dd><UtcTime at={sourced.fetchedAt} /></dd></div>
+          <div><dt>Developer</dt><dd><DetailValue value={metadata?.developer} /></dd></div>
+          <div><dt>Publisher</dt><dd><DetailValue value={metadata?.publisher} /></dd></div>
+          <div><dt>Platforms</dt><dd><DetailValue value={metadata?.platforms?.length ? <PlatformLabels platforms={metadata.platforms} /> : null} /></dd></div>
+          <div><dt>Release date</dt><dd><DetailValue value={metadata?.releaseDate} /></dd></div>
+          <div><dt>Genre</dt><dd><DetailValue value={metadata?.genres?.join(", ")} /></dd></div>
+          {!!sources.length && <div><dt>Source</dt><dd>{sources.map((source, index) => <span key={source.provider}>{index > 0 && ", "}<a className="text-link" href={source.sourceUrl} target="_blank" rel="noreferrer">{source.provider === "steam" ? "Steam" : source.provider === "epic" ? "Epic Games" : "Wikidata"}</a></span>)}</dd></div>}
+          {metadata && <div><dt>Last checked</dt><dd><UtcTime at={metadata.fetchedAt} /></dd></div>}
         </dl>
-        <ScreenshotGallery screenshots={sourced.screenshots} trailer={sourced.trailer} title={game.title} steamAppId={sourced.canonicalSteamAppId} />
-      </section>}
+        {metadata && <ScreenshotGallery screenshots={metadata.screenshots} trailer={metadata.trailer} title={game.title} steamAppId={metadata.canonicalSteamAppId} />}
+      </section>
     </div>
   </main></>;
 }

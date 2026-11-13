@@ -1,6 +1,67 @@
 import { expect, it } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createElement } from "react";
+import { exactSteamMatch, mapPlatform, mergeMetadata, wikidataMetadata, refreshCrossMetadata } from "@/src/lib/metadata";
+import { PlatformLabels } from "@/src/components/StoreBadge";
+import { DetailValue } from "@/src/components/DetailValue";
 import { testDb } from "./helpers/db";
 import { parseSteamMetadata, parseEpicMetadata, readMetadata, saveMetadata, refreshSteamMetadata, decodeMetadata } from "@/src/lib/metadata";
+
+it("accepts only normalized exact app titles", () => {
+  expect(exactSteamMatch({ items: [{ id: 1, type: "app", name: " MARK OF THE DEEP " }] }, "Mark of the Deep")).toBe(1);
+  expect(exactSteamMatch({ items: [{ id: 2, type: "app", name: "Mark of the Deep Demo" }, { id: 3, type: "bundle", name: "Mark of the Deep" }] }, "Mark of the Deep")).toBeNull();
+});
+it("maps Wikidata platforms without dropping unknown labels", () => {
+  expect(["Microsoft Windows", "OS X", "Xbox Series X and Series S", "PlayStation 5", "Nintendo Switch", "Steam Deck", "Amiga"].map(mapPlatform)).toEqual(["windows", "macos", "xboxseries", "ps5", "switch", "steamdeck", "Amiga"]);
+});
+it("merges per field in offer, Steam, Wikidata order with provenance", () => {
+  const offer = parseEpicMetadata({ id: "o", namespace: "n", keyImages: [], customAttributes: [{ key: "developerName", value: "Official" }] }, "o", "n", 1);
+  const cross = parseSteamMetadata(steam, 123, 1);
+  const merged = mergeMetadata(offer, cross);
+  expect(merged.developer).toBe("Official");
+  expect(merged.publisher).toBe("Publisher");
+  expect(merged.fieldSources?.developer?.provider).toBe("epic");
+  expect(merged.fieldSources?.publisher?.provider).toBe("steam");
+  const lower = { ...cross, developer: "Lowest", publisher: "Lowest", releaseDate: "2025", fieldSources: { releaseDate: { provider: "wikidata" as const, sourceUrl: "https://www.wikidata.org/wiki/Q1", productId: "Q1", locale: "en" as const, country: "ID" as const, fetchedAt: 1 } } };
+  const three = mergeMetadata(offer, cross, lower);
+  expect(three.developer).toBe("Official");
+  expect(three.publisher).toBe("Publisher");
+  expect(three.releaseDate).toBe("2025");
+  expect(three.fieldSources?.releaseDate?.provider).toBe("wikidata");
+  expect(decodeMetadata(JSON.stringify(merged))).not.toBeNull();
+});
+it("fills only missing fields from exact video-game Wikidata claims and preserves precision", async () => {
+  const base = parseSteamMetadata(steam, 123, 1);
+  const claim = (value: unknown) => [{ mainsnak: { datavalue: { value } } }];
+  const replies = [{ search: [{ id: "Q1", label: "Game", description: "2025 video game" }] }, { entities: { Q1: { labels: { en: { value: "Game" } }, descriptions: { en: { value: "2025 video game" } }, claims: { P178: claim({ id: "Q2" }), P136: claim({ id: "Q3" }), P577: claim({ time: "+2025-00-00T00:00:00Z", precision: 9 }) } } } }, { entities: { Q2: { labels: { en: { value: "Other studio" } } }, Q3: { labels: { en: { value: "role-playing video game" } } } } }];
+  const result = await wikidataMetadata("Game", base, async () => json(replies.shift()), AbortSignal.timeout(1000));
+  expect(result.developer).toBe("Studio");
+  expect(result.genres).toEqual(["role-playing video game"]);
+  expect(result.releaseDate).toBe("2025");
+  expect(result.fieldSources?.genres?.provider).toBe("wikidata");
+  expect(result.fieldSources?.developer?.provider).toBe("steam");
+});
+it("isolates blocked enrichment and respects retry cache bounds", async () => {
+  const db = await testDb();
+  await db.execute("INSERT INTO games(id,store,external_id,kind,title) VALUES('g','epic','o','free_to_keep','Game')");
+  await saveMetadata(db, "g", "epic", "n", parseEpicMetadata({ id: "o", namespace: "n", keyImages: [], description: "Real summary" }, "o", "n", 1), 1);
+  let calls = 0;
+  const blocked: typeof fetch = async () => { calls++; return new Response(null, { status: 403 }); };
+  await refreshCrossMetadata(db, blocked, 100);
+  expect(calls).toBe(2);
+  expect((await readMetadata(db, "g"))?.aboutText).toBe("Real summary");
+  await refreshCrossMetadata(db, blocked, 101);
+  expect(calls).toBe(2);
+  await refreshCrossMetadata(db, blocked, 3600101);
+  expect(calls).toBe(4);
+  db.close();
+});
+it("renders explicit missing rows and accessible platform names", () => {
+  expect(renderToStaticMarkup(createElement(DetailValue, { value: null }))).toContain("Not listed by Steam, Epic or Wikidata");
+  const html = renderToStaticMarkup(createElement(PlatformLabels, { platforms: ["windows", "ps5", "Amiga"] }));
+  for (const name of ["Windows", "PlayStation 5", "Amiga"]) expect(html).toContain(name);
+  expect(html).toContain("<title>Windows</title>");
+});
 
 const steam = { "123": { success: true, data: { steam_appid: 123, type: "game", about_the_game: '<p>Hello &amp; world</p><script>bad()</script><svg><text>bad</text></svg><p>Next<img src="https://evil.test/x"></p>', platforms: { windows: true, mac: false, linux: true }, screenshots: [{ path_full: "https://shared.akamai.steamstatic.com/one.jpg", path_thumbnail: "https://shared.akamai.steamstatic.com/small.jpg" }], developers: ["Studio"], publishers: ["Publisher"] } } };
 it("extracts inert official Steam text, native platforms and provenance without discount requirement", () => {

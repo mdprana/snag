@@ -6,7 +6,7 @@ import { fetchEpic, type GameRow } from "./sources/epic.ts";
 import { fetchGamerPower } from "./sources/gamerpower.ts";
 import { fetchSteamStore } from "./sources/steamstore.ts";
 import type { Client } from "@libsql/client";
-import { refreshSteamMetadata, saveMetadata } from "./lib/metadata.ts";
+import { mergeMetadata, readMetadata, refreshCrossMetadata, refreshSteamMetadata, saveMetadata } from "./lib/metadata.ts";
 
 type PushSubscription = { id: string; endpoint: string; p256dh: string; auth: string };
 type Send = (subscription: PushSubscription, payload: { title: string; body: string; url: string }) => Promise<unknown>;
@@ -39,7 +39,9 @@ export async function runPoll(deps: PollDeps = {}): Promise<{ source: string; ok
         if (game.metadata) {
           try {
             const row = await client.execute({ sql: "SELECT id FROM games WHERE store=? AND external_id=?", args: [game.store, game.externalId] });
-            await saveMetadata(client, String(row.rows[0].id), game.metadata.provider, game.providerNamespace ?? null, game.metadata, now.getTime());
+            const previous = await readMetadata(client, String(row.rows[0].id));
+            const metadata = previous ? { ...mergeMetadata(game.metadata, previous), enrichmentAt: previous.enrichmentAt } : game.metadata;
+            await saveMetadata(client, String(row.rows[0].id), game.metadata.provider, game.providerNamespace ?? null, metadata, now.getTime());
           } catch { log("warn", "metadata save failed", { source }); }
         }
       }
@@ -56,6 +58,7 @@ export async function runPoll(deps: PollDeps = {}): Promise<{ source: string; ok
     }
   }
   try { await refreshSteamMetadata(client, fetchFn, now.getTime()); } catch { log("warn", "metadata refresh failed"); }
+  try { await refreshCrossMetadata(client, fetchFn, now.getTime()); } catch { log("warn", "cross metadata refresh failed"); }
   return results;
 }
 

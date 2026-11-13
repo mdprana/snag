@@ -1,7 +1,7 @@
 import { SourceError } from "./epic.ts";
 
 export async function sourceJson(url: string, fetchFn: typeof fetch, signal = AbortSignal.timeout(15000)): Promise<unknown> {
-  const response = await fetchFn(url, { signal, cache: "no-store", redirect: "error" });
+  const response = await fetchFn(url, { signal, cache: "no-store", redirect: "error", ...(url.startsWith("https://www.wikidata.org/") ? { headers: { "User-Agent": "Snag/0.1 (public game metadata enrichment; free-games-hub)" } } : {}) });
   if (!response.ok || response.redirected) throw new SourceError(`Source HTTP ${response.status}`);
   if (response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase() !== "application/json") throw new SourceError("Source response is not JSON");
   const reader = response.body?.getReader();

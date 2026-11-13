@@ -27,8 +27,8 @@ it("icon-only labels name the button, describe via tooltip and never use title",
   expect(renderToStaticMarkup(createElement(StoreBadge, { store: "epic" }))).toContain('aria-label="Epic Games Store"');
   const windows = renderToStaticMarkup(createElement(IconLabel, { kind: "windows" }));
   expect(windows).toContain('aria-label="Windows"');
-  expect(windows).toContain(">Win<");
-  expect(windows).not.toContain("<svg");
+  expect(windows).toContain("<title>Windows</title>");
+  expect(windows).toContain("<svg");
 });
 
 it("platform list renders labels and nothing when unknown", () => {

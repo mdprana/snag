@@ -49,15 +49,16 @@ it("detail warns for absent, failed, or over-90-minute availability checks, not 
   }
 });
 
-it("detail hides missing platforms and renders only verified platforms", async () => {
+it("detail shows missing-field rows and renders only verified platform icons", async () => {
   const metadata: GameMetadata = { provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=1&cc=id&l=en", fetchedAt: 0, locale: "en", country: "ID", aboutText: "Store summary", aboutKind: "summary", developer: null, publisher: null, platforms: null, screenshots: [] };
   vi.mocked(getGame).mockResolvedValue({ id: "a", store: "steam", externalId: "1", kind: "free_to_keep", title: "A", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: null });
   for (const platforms of [null, [], ["windows"]] as GameMetadata["platforms"][]) {
     vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata: { ...metadata, platforms }, attemptedAt: null, errorCode: null });
     const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "a" }) }));
-    expect(html.includes("<dt>Platforms</dt>")).toBe(Boolean(platforms?.length));
-    expect(html).not.toContain("<dt>Developer</dt>");
-    expect(html).not.toContain("<dt>Publisher</dt>");
+    expect(html).toContain("<dt>Platforms</dt>");
+    expect(html).toContain("<dt>Developer</dt>");
+    expect(html).toContain("<dt>Publisher</dt>");
+    expect(html).toContain("Not listed by Steam, Epic or Wikidata");
     if (platforms?.length) expect(html).toContain('aria-label="Windows"');
   }
 });
@@ -69,16 +70,17 @@ it("detail never renders placeholder copy, empty About or empty rows", async () 
     vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata, attemptedAt: null, errorCode: null });
     const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "h" }) }));
     expect(html).not.toMatch(/not available|Unknown|N\/A|Coming soon/);
-    expect(html).not.toContain(">About</h2>");
+    expect(html).toContain(">About</h2>");
+    expect(html).toContain("Not listed by Steam, Epic or Wikidata");
     expect(html).not.toMatch(/<dd><\/dd>|<p class="about-text">\s*<\/p>/);
     expect(html.includes("<dt>Developer</dt><dd>Dev &lt;b&gt;x&lt;/b&gt;</dd>")).toBe(Boolean(metadata?.developer));
-    expect(html.includes("<dt>Source</dt>")).toBe(Boolean(metadata?.developer));
+    expect(html).not.toContain("<dt>Source</dt>");
   }
   vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata: { ...base, aboutText: "Real summary." }, attemptedAt: null, errorCode: null });
   const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "h" }) }));
   expect(html).toContain(">About</h2>");
   expect(html).toContain('<p class="about-text">Real summary.</p>');
-  expect(html).not.toContain("<dt>Developer</dt>");
+  expect(html).toContain("<dt>Developer</dt>");
 });
 
 it("trailer is first media item, before screenshots, and absent trailer leaves no slot", async () => {

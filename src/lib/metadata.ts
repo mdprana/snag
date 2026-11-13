@@ -7,13 +7,14 @@ import { sourceJson } from "../sources/http.ts";
 export const epicMetadataUrl = "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID";
 const steamUrl = (id: number) => `https://store.steampowered.com/api/appdetails?appids=${id}&cc=id&l=en`;
 const image = z.string().refine(value => safeImageUrl(value) === value);
-const fieldNames = ["aboutText", "developer", "publisher", "platforms", "screenshots", "trailer"] as const;
+const fieldNames = ["aboutText", "developer", "publisher", "platforms", "releaseDate", "genres", "screenshots", "trailer"] as const;
 const trailer = z.object({ kind: z.literal("native"), url: z.string(), mimeType: z.literal("application/vnd.apple.mpegurl"), poster: image, title: z.string().min(1).max(200) });
-const fieldSource = z.object({ provider: z.enum(["steam", "epic"]), sourceUrl: z.string(), productId: z.string().min(1).max(100), locale: z.enum(["en", "en-US"]), country: z.literal("ID"), fetchedAt: z.number().int().nonnegative() });
+const fieldSource = z.object({ provider: z.enum(["steam", "epic", "wikidata"]), sourceUrl: z.string(), productId: z.string().min(1).max(100), locale: z.enum(["en", "en-US"]), country: z.literal("ID"), fetchedAt: z.number().int().nonnegative() });
 const metadataSchema = z.object({
-  provider: z.enum(["steam", "epic"]), sourceUrl: z.string(), fetchedAt: z.number().int().nonnegative(),
+  provider: z.enum(["steam", "epic"]), sourceUrl: z.string(), fetchedAt: z.number().int().nonnegative(), enrichmentAt: z.number().int().nonnegative().optional(),
   locale: z.enum(["en", "en-US"]), country: z.literal("ID"), aboutText: z.string().max(20000), aboutKind: z.enum(["full", "summary"]),
-  platforms: z.array(z.enum(["windows", "macos", "linux", "android", "ios"])).max(5).nullable(),
+  platforms: z.array(z.string().min(1).max(100)).max(30).nullable(),
+  releaseDate: z.string().max(100).nullable().optional(), genres: z.array(z.string().max(100)).max(30).optional(),
   screenshots: z.array(z.object({ url: image, thumbnailUrl: image })).max(12),
   developer: z.string().max(200).nullable(), publisher: z.string().max(200).nullable(),
   canonicalSteamAppId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
@@ -21,7 +22,7 @@ const metadataSchema = z.object({
   trailer: trailer.nullable().optional(),
 }).refine(value => !value.trailer || (value.provider === "steam" && value.canonicalSteamAppId !== undefined && safeTrailerUrl(value.trailer.url, value.canonicalSteamAppId) === value.trailer.url))
   .refine(value => value.provider === "epic" ? value.sourceUrl === epicMetadataUrl && value.locale === "en-US" && value.canonicalSteamAppId === undefined : /^https:\/\/store\.steampowered\.com\/api\/appdetails\?appids=[1-9]\d*&cc=id&l=en$/.test(value.sourceUrl) && value.locale === "en" && (value.canonicalSteamAppId === undefined || value.sourceUrl === steamUrl(value.canonicalSteamAppId)))
-  .refine(value => Object.values(value.fieldSources ?? {}).every(source => source.provider === value.provider && source.sourceUrl === value.sourceUrl && source.locale === value.locale && source.fetchedAt === value.fetchedAt));
+  .refine(value => Object.values(value.fieldSources ?? {}).every(source => source.provider === "steam" ? /^https:\/\/store\.steampowered\.com\/api\/appdetails\?appids=[1-9]\d*&cc=id&l=en$/.test(source.sourceUrl) && source.sourceUrl === steamUrl(Number(source.productId)) && source.locale === "en" : source.provider === "epic" ? source.sourceUrl === epicMetadataUrl && source.locale === "en-US" : /^Q[1-9]\d*$/.test(source.productId) && source.sourceUrl === `https://www.wikidata.org/wiki/${source.productId}` && source.locale === "en"));
 export type GameMetadata = z.infer<typeof metadataSchema>;
 
 function text(html: string, limit = 20000): string {
@@ -39,7 +40,7 @@ function text(html: string, limit = 20000): string {
 }
 const plain = (value: string | undefined) => value ? text(value, 200) || null : null;
 function withSources(value: Omit<GameMetadata, "fieldSources">, productId: string): GameMetadata {
-  const present = fieldNames.filter(name => name === "platforms" || name === "screenshots" ? !!value[name]?.length : !!value[name]);
+  const present = fieldNames.filter(name => name === "platforms" || name === "screenshots" || name === "genres" ? !!value[name]?.length : !!value[name]);
   const source = { provider: value.provider, sourceUrl: value.sourceUrl, productId, locale: value.locale, country: value.country, fetchedAt: value.fetchedAt };
   return metadataSchema.parse({ ...value, fieldSources: Object.fromEntries(present.map(name => [name, source])) });
 }
@@ -60,11 +61,13 @@ export function parseSteamMetadata(json: unknown, id: number, now: number, expec
     steam_appid: z.literal(id), type: z.literal("game"), name: expectedName === undefined ? z.string().optional() : z.literal(expectedName), about_the_game: z.string().optional(), detailed_description: z.string().optional(), short_description: z.string().optional(),
     platforms: z.object({ windows: z.boolean(), mac: z.boolean(), linux: z.boolean() }).optional(),
     screenshots: z.array(z.object({ path_full: z.string(), path_thumbnail: z.string() })).max(200).optional(),
+    release_date: z.object({ date: z.string() }).optional(), genres: z.array(z.object({ description: z.string() })).max(30).optional(),
     developers: z.array(z.string()).max(100).optional(), publishers: z.array(z.string()).max(100).optional(), movies: z.unknown().optional(),
   }) }) }).parse(json)[String(id)].data;
   const full = data.about_the_game || data.detailed_description;
   return withSources({ provider: "steam", sourceUrl: steamUrl(id), fetchedAt: now, locale: "en", country: "ID", canonicalSteamAppId: id, aboutText: text(full || data.short_description || ""), aboutKind: full ? "full" : "summary",
     platforms: data.platforms ? (["windows", "macos", "linux"] as const).filter((_, i) => [data.platforms!.windows, data.platforms!.mac, data.platforms!.linux][i]) : null,
+    releaseDate: plain(data.release_date?.date), genres: (data.genres ?? []).map(item => plain(item.description)).filter((item): item is string => !!item),
     screenshots: gallery((data.screenshots ?? []).map(item => ({ url: item.path_full, thumbnailUrl: item.path_thumbnail }))), developer: plain(data.developers?.join(", ")), publisher: plain(data.publishers?.join(", ")), trailer: steamTrailer(data.movies, id) }, String(id));
 }
 export function parseEpicMetadata(json: unknown, id: string, namespace: string, now: number): GameMetadata {
@@ -119,6 +122,78 @@ function steamIdentity(row: Record<string, unknown>): { id: number; name?: strin
   const mapped = Object.hasOwn(keyGiveawaySteamApps, String(row.external_id)) ? keyGiveawaySteamApps[String(row.external_id)] : undefined;
   if (mapped && mapped.title === row.title) return { id: mapped.appId, name: mapped.name };
   throw new Error("identity");
+}
+const normalizeTitle = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+export function exactSteamMatch(json: unknown, title: string): number | null {
+  const parsed = z.object({ items: z.array(z.object({ id: z.number().int().positive(), type: z.string(), name: z.string() })).max(100) }).safeParse(json);
+  return parsed.success ? parsed.data.items.find(item => item.type === "app" && normalizeTitle(item.name) === normalizeTitle(title))?.id ?? null : null;
+}
+export function mapPlatform(label: string): string {
+  const names: Record<string, string> = { "microsoft windows": "windows", windows: "windows", "os x": "macos", macos: "macos", "mac os": "macos", linux: "linux", android: "android", ios: "ios", "playstation 4": "ps4", "playstation 5": "ps5", "xbox one": "xboxone", "xbox series x and series s": "xboxseries", "xbox series x|s": "xboxseries", "nintendo switch": "switch", "steam deck": "steamdeck" };
+  return names[label.toLowerCase()] ?? label;
+}
+export function mergeMetadata(primary: GameMetadata, ...fallbacks: GameMetadata[]): GameMetadata {
+  const result = { ...primary, fieldSources: { ...primary.fieldSources } };
+  for (const fallback of fallbacks) for (const field of fieldNames) {
+    if (field === "trailer") continue;
+    const current = result[field];
+    const next = fallback[field];
+    if ((current == null || current === "" || Array.isArray(current) && !current.length) && next != null && next !== "" && (!Array.isArray(next) || next.length)) {
+      Object.assign(result, { [field]: next });
+      if (fallback.fieldSources?.[field]) result.fieldSources[field] = fallback.fieldSources[field];
+      if (field === "aboutText") result.aboutKind = fallback.aboutKind;
+    }
+  }
+  return metadataSchema.parse(result);
+}
+const wikidataApi = "https://www.wikidata.org/w/api.php";
+const wdEntity = z.object({ labels: z.record(z.string(), z.object({ value: z.string() })).optional(), descriptions: z.record(z.string(), z.object({ value: z.string() })).optional(), claims: z.record(z.string(), z.array(z.object({ mainsnak: z.object({ datavalue: z.object({ value: z.unknown() }).optional() }) }))).optional() });
+export async function wikidataMetadata(title: string, base: GameMetadata, fetchFn: typeof fetch, signal: AbortSignal): Promise<GameMetadata> {
+  const get = (query: string) => sourceJson(`${wikidataApi}?format=json&${query}`, fetchFn, signal);
+  const search = z.object({ search: z.array(z.object({ id: z.string().regex(/^Q[1-9]\d*$/), label: z.string(), description: z.string().optional() })).max(50) }).parse(await get(`action=wbsearchentities&language=en&limit=10&search=${encodeURIComponent(title)}`));
+  const match = search.search.find(item => normalizeTitle(item.label) === normalizeTitle(title) && /video game/i.test(item.description ?? ""));
+  if (!match) return base;
+  const entities = z.object({ entities: z.record(z.string(), wdEntity) });
+  const entity = entities.parse(await get(`action=wbgetentities&ids=${match.id}&languages=en&props=labels|descriptions|claims`)).entities[match.id];
+  if (!entity || normalizeTitle(entity.labels?.en?.value ?? "") !== normalizeTitle(title) || !/video game/i.test(entity.descriptions?.en?.value ?? "")) return base;
+  const values = (property: string) => (entity.claims?.[property] ?? []).map(claim => claim.mainsnak.datavalue?.value);
+  const ids = (property: string) => values(property).flatMap(value => { const parsed = z.object({ id: z.string().regex(/^Q[1-9]\d*$/) }).safeParse(value); return parsed.success ? [parsed.data.id] : []; });
+  const allIds = [...new Set(["P178", "P123", "P400", "P136"].flatMap(ids))].slice(0, 50);
+  const labels = allIds.length ? entities.parse(await get(`action=wbgetentities&ids=${allIds.join("|")}&languages=en&props=labels`)).entities : {};
+  const names = (property: string) => ids(property).map(id => labels[id]?.labels?.en?.value).filter((value): value is string => !!value).slice(0, 30);
+  const dates = values("P577").flatMap(value => { const parsed = z.object({ time: z.string(), precision: z.number() }).safeParse(value); if (!parsed.success || parsed.data.precision < 9) return []; const match = /^\+(\d{4})-(\d{2})-(\d{2})T/.exec(parsed.data.time); return match ? [match.slice(1, parsed.data.precision >= 11 ? 4 : parsed.data.precision === 10 ? 3 : 2).join("-")] : []; }).sort();
+  const fields = { developer: plain(names("P178").join(", ")), publisher: plain(names("P123").join(", ")), platforms: names("P400").map(mapPlatform), genres: names("P136"), releaseDate: dates[0] ?? null };
+  const source = { provider: "wikidata" as const, sourceUrl: `https://www.wikidata.org/wiki/${match.id}`, productId: match.id, locale: "en" as const, country: "ID" as const, fetchedAt: Date.now() };
+  const fallback = { ...base, aboutText: "", screenshots: [], trailer: null, ...fields, fieldSources: Object.fromEntries(Object.entries(fields).filter(([, value]) => Array.isArray(value) ? value.length : !!value).map(([field]) => [field, source])) };
+  return mergeMetadata(base, fallback);
+}
+export async function refreshCrossMetadata(db: Client, fetchFn: typeof fetch, now: number): Promise<void> {
+  const rows = await db.execute({ sql: `SELECT g.id,g.title,g.store,m.payload_json,m.provider_namespace FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE m.payload_json IS NOT NULL AND json_valid(m.payload_json) AND ((m.error_code IS NOT NULL AND m.attempted_at<=?) OR (m.error_code IS NULL AND (json_extract(m.payload_json,'$.enrichmentAt') IS NULL OR json_extract(m.payload_json,'$.enrichmentAt')<=?))) ORDER BY g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000] });
+  const budget = AbortSignal.timeout(20000);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < rows.rows.length && !budget.aborted) {
+      const row = rows.rows[cursor++];
+      let base = decodeMetadata(row.payload_json);
+      if (!base) continue;
+      const title = String(row.title).replace(/ \(Steam\) Key Giveaway$/i, "");
+      const signal = () => AbortSignal.any([budget, AbortSignal.timeout(5000)]);
+      let failed = false;
+      if (row.store !== "steam") try {
+        const id = exactSteamMatch(await sourceJson(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&cc=ID&l=en`, fetchFn, signal()), title);
+        if (id) {
+          const json = await sourceJson(steamUrl(id), fetchFn, signal());
+          const name = z.object({ [String(id)]: z.object({ data: z.object({ name: z.string() }) }) }).parse(json)[String(id)].data.name;
+          if (normalizeTitle(name) !== normalizeTitle(title)) throw new Error("identity");
+          const cross = parseSteamMetadata(json, id, now);
+          base = mergeMetadata(base, cross);
+        }
+      } catch { failed = true; }
+      if (!base.developer || !base.publisher || !base.platforms?.length || !base.releaseDate || !base.genres?.length) try { base = await wikidataMetadata(title, base, fetchFn, signal()); } catch { failed = true; }
+      await saveMetadata(db, String(row.id), base.provider, row.provider_namespace == null ? null : String(row.provider_namespace), { ...base, enrichmentAt: now }, now, failed ? "enrichment" : null).catch(() => {});
+    }
+  };
+  await Promise.all([worker(), worker()]);
 }
 export async function refreshSteamMetadata(db: Client, fetchFn: typeof fetch, now: number): Promise<void> {
   const rows = await db.execute({ sql: `SELECT g.id,g.external_id,g.kind,g.title,g.store_url,g.claim_url FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE g.store='steam' AND g.kind IN ('free_to_keep','key_giveaway') AND (m.attempted_at IS NULL OR (m.attempted_at<=? AND (m.fetched_at IS NULL OR m.fetched_at<=?))) ORDER BY CASE WHEN g.ends_at IS NULL OR g.ends_at>? THEN 0 ELSE 1 END,g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000, now] });
