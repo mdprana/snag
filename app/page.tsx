@@ -34,7 +34,7 @@ export default async function Home() {
           {live && ending?.endsAt && <div className="hero-ending"><p className="hero-game">{ending.title}</p><p className="hero-countdown"><span className="meta">Ends in</span> <Countdown endsAt={ending.endsAt} now={now.getTime()} /></p><p className="dim">Claim before <UtcTime at={ending.endsAt} />.</p></div>}
           {copy === "upcoming" && hero.game?.startsAt && <p className="hero-copy mt-7">Coming next: <UtcTime at={hero.game.startsAt} />.</p>}
           {copy === "archive" && <p className="hero-copy mt-7">Previously featured. Not currently available.</p>}
-          <a className="btn btn-signal mt-6" href={live ? "/feed" : hero.game ? `/g/${encodeURIComponent(hero.game.id)}` : "/feed"}>{live ? "Browse free games" : copy === "upcoming" ? "View upcoming game" : "View game details"}</a>
+          <a className="btn btn-signal mt-6" href={live || copy === "upcoming" ? "/feed" : hero.game ? `/g/${encodeURIComponent(hero.game.id)}` : "/feed"}>{live ? "Browse free games" : copy === "upcoming" ? "View upcoming game" : "View game details"}</a>
         </div>
       </section>
       <p role="status" className={`banner mb-8${stale ? " banner-warning" : ""}`}>{stale && <span className="warning-icon" aria-hidden="true">!</span>}{stale ? "Availability may be outdated. Last checked " : "Offers checked "}{checked === null ? "never." : <><UtcTime at={checked} />.</>} Availability varies by region.</p>

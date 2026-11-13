@@ -27,6 +27,9 @@ describe("landing data", () => {
   it("one date formatter: no locale-default dates in UI source", () => {
     for (const file of ["src/components/CoverStack.tsx", "src/components/GameRow.tsx", "src/components/NotificationSettings.tsx", "app/page.tsx", "app/feed/page.tsx", "app/g/[id]/page.tsx"]) expect(readFileSync(file, "utf8"), file).not.toMatch(/toLocale|DateTimeFormat/);
   });
+  it("hero CTA sends active and upcoming games to feed, preserving archive details", () => {
+    expect(readFileSync("app/page.tsx", "utf8")).toContain('href={live || copy === "upcoming" ? "/feed" : hero.game ? `/g/${encodeURIComponent(hero.game.id)}` : "/feed"}');
+  });
   it("soonestEnding picks the earliest end and skips open-ended offers", () => {
     expect(soonestEnding([])).toBeNull();
     expect(soonestEnding([base])).toBeNull();
