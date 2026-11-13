@@ -28,7 +28,7 @@
   --t-base: 0.5s;
   --t-slow: 1.2s;
   --gutter: clamp(16px, 4vw, 40px);
-  --claim-bar-space: calc(212px + env(safe-area-inset-bottom));
+  --claim-bar-space: calc(150px + env(safe-area-inset-bottom));
 }
 
 @theme inline {
@@ -36,8 +36,17 @@
   --color-foreground: var(--foreground);
 }
 
+html { height: auto; min-height: 100%; background: var(--background); }
+
 body {
-  background: var(--background);
+  min-height: 100vh;
+  min-height: 100svh;
+  background:
+    radial-gradient(60% 700px at 15% 0%, rgb(255 90 60 / 0.08), transparent 70%),
+    radial-gradient(50% 600px at 85% 0%, rgb(102 192 244 / 0.06), transparent 70%),
+    var(--background);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
   color: var(--foreground);
   font-family: var(--font-body);
 }
@@ -186,14 +195,6 @@ a[href], button, input, select {
 .game-art-fallback span { font: 600 clamp(24px, 12cqi, 72px)/1 var(--font-display); text-transform: uppercase; }
 
 /* Hero: official artwork carries state; with no art the hero is a single text column. */
-/* The only page atmosphere: two faint washes anchored to the top of Home, full-bleed via body so nothing overflows. */
-body:has(.hero) {
-  background:
-    radial-gradient(60% 700px at 15% 0%, rgb(255 90 60 / 0.08), transparent 70%),
-    radial-gradient(50% 600px at 85% 0%, rgb(102 192 244 / 0.06), transparent 70%),
-    var(--background);
-}
-
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -222,46 +223,18 @@ body:has(.hero) {
 .hero-copy { max-width: 46ch; font-size: 18px; line-height: 1.5; }
 
 .cover-stage {
-  position: relative;
   width: 100%;
   max-width: 600px;
-  aspect-ratio: 16 / 13;
   margin-left: auto;
-  perspective: 1400px;
+  touch-action: pan-y;
 }
 
-.cover-stage[data-count="1"] { aspect-ratio: 16 / 9.6; }
-
-.cover-float, .cover-stack { position: absolute; inset: 0; }
-.cover-stack { pointer-events: none; }
-.cover { pointer-events: auto; }
-
-.cover-stack {
-  transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
-  transition: transform var(--t-base) var(--ease-out-snag);
-}
-
-.cover:nth-child(1) { --i: 0; }
-.cover:nth-child(2) { --i: 1; --fan: -5deg; left: 6%; }
-.cover:nth-child(3) { --i: 2; --fan: 5deg; left: 18%; bottom: 14%; }
-
-.cover {
-  position: absolute;
-  width: 72%;
-  left: 12%;
-  bottom: calc(var(--i) * 14%);
-  z-index: calc(3 - var(--i));
-  rotate: var(--fan, 0deg);
-  transform-origin: center bottom;
-}
-
-.cover-stage[data-count="1"] .cover { width: 100%; left: 0; }
-.cover-stage[data-count="2"] .cover { width: 76%; }
-.cover-stage[data-count="2"] .cover:first-child { left: 24%; }
-.cover-stage[data-count="2"] .cover:nth-child(2) { bottom: 28%; }
-.cover:not(:first-child) .cover-caption { visibility: visible; position: absolute; inset: 0 0 auto; padding: 10px 12px; background: rgb(11 10 9 / 0.94); border-radius: var(--radius-media) var(--radius-media) 0 0; }
-.cover-fan { position: relative; }
-.cover:focus-within { z-index: 4; }
+.cover-stack { overflow: clip; padding: 6px; margin: -6px; }
+.cover { width: 100%; }
+.cover .game-art { aspect-ratio: 16 / 9; object-fit: cover; }
+.cover-caption { min-height: 70px; }
+.cover-labels { min-height: 52px; }
+.cover-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
 
 .cover-link { display: block; border-radius: var(--radius-media); box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.7); transition: transform var(--t-quick) var(--ease-out-snag); }
 .cover-link:active { transform: scale(0.96); }
@@ -270,13 +243,10 @@ body:has(.hero) {
 .cover-title { min-width: 0; overflow-wrap: anywhere; font: 600 clamp(18px, 3vw, 24px)/1.2 var(--font-display); }
 .cover-labels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 4px 4px; background: var(--color-surface); border-radius: 0 0 var(--radius-media) var(--radius-media); }
 .cover-status { margin-left: auto; padding-right: 8px; color: var(--color-ink-dim); font: 12px/1.4 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
-/* Hidden until the motion fan-in runs; the delayed CSS reveal is a safety net if scripts stall. */
 @keyframes show { to { opacity: 1; } }
-@media (scripting: enabled) { .cover-fan { opacity: 0; animation: show 0s 3s forwards; } }
 /* Below-fold reveal waits for scroll; reduced motion or a stalled script never leaves an empty gap. */
 @media (prefers-reduced-motion: no-preference) { .reveal-item { opacity: 0; animation: show 0s 3s forwards; } }
 .cover-link .game-art { border-radius: var(--radius-media) var(--radius-media) 0 0; }
-.cover:not(:first-child) .cover-labels { visibility: hidden; }
 @media (max-width: 639px) { .claim-actions { align-items: stretch; } .game-row-actions { grid-column: 1 / -1; } }
 @media (forced-colors: active) { :focus-visible { outline-color: Highlight; } }
 
@@ -286,8 +256,7 @@ body:has(.hero) {
 
 .enter { animation: rise var(--t-slow) var(--ease-out-snag) both; animation-delay: calc(var(--d, 0) * 0.08s); }
 
-/* Sections: one faint gradient rule between landing sections. */
-.section { padding-block: 64px; background: linear-gradient(90deg, transparent, var(--color-line) 20%, var(--color-line) 80%, transparent) top / 100% 1px no-repeat; }
+.section { padding-block: 32px; }
 
 .section-title {
   font-size: clamp(26px, 4vw, 40px);
@@ -319,7 +288,6 @@ body:has(.hero) {
 }
 
 .site-footer {
-  border-top: 1px solid var(--color-line);
   padding-block: 32px max(32px, env(safe-area-inset-bottom));
 }
 
@@ -385,7 +353,7 @@ body:has(.hero) {
 .entry-motion:nth-child(n+6) { animation-delay: 0.3s; }
 
 /* Detail */
-main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
+main:has(> .detail) { padding-bottom: max(var(--claim-bar-space), 190px); }
 .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 16px 24px; }
 .detail-art { position: relative; min-width: 0; }
 .detail-art::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; border-radius: 0 0 var(--radius-media) var(--radius-media); background: linear-gradient(transparent, rgb(11 10 9 / 0.7)); pointer-events: none; }
@@ -431,7 +399,7 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
   .game-row-claimed .game-row-actions { grid-column: 2; }
   main:has(> .detail) { padding-bottom: 0; }
   .detail { grid-template-columns: 3fr 2fr; align-items: start; padding-bottom: 64px; }
-  .detail-bar { position: static; border: 0; padding: 0; }
+  .detail-bar { position: static; border: 0; padding: 0; background: transparent; }
 }
 
 @media (min-width: 768px) {
@@ -444,7 +412,7 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
   .hero:has(.hero-art) { grid-template-columns: 5fr 6fr; grid-template-areas: "head art" "body art"; column-gap: 40px; row-gap: 20px; align-items: end; }
   .hero-body { align-self: start; }
   .hero-art { align-self: center; }
-  .section { padding-block: 96px; }
+  .section { padding-block: 72px; }
 }
 
 /* Reduced motion: no transforms, tilt or float; opacity only. */

@@ -28,16 +28,18 @@ await database.execute({ sql: "INSERT INTO game_metadata VALUES('steam-active','
 for (const source of ["epic", "steam", "gamerpower"]) await database.execute({ sql: "INSERT INTO poll_runs(source,ok,at) VALUES(?,1,?)", args: [source, now - 91 * 60000] });
 database.close();
 const keys = webpush.generateVAPIDKeys();
+const production = process.env.PLAYWRIGHT_PRODUCTION === "1";
+const baseURL = production ? "https://localhost:3113" : "https://localhost:3100";
 export default defineConfig({
   testDir: "./e2e",
   outputDir: ".work/playwright-results",
   workers: 1,
-  use: { baseURL: "https://localhost:3100", viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true },
+  use: { baseURL, viewport: { width: 390, height: 844 }, ignoreHTTPSErrors: true },
   webServer: {
-    command: "npm run dev",
-    url: "https://localhost:3100/feed",
+    command: production ? "node e2e/production-server.mjs" : "npm run dev",
+    url: `${baseURL}/feed`,
     ignoreHTTPSErrors: true,
     timeout: 120000,
-    env: { APP_URL: "https://localhost:3100", DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000" },
+    env: { APP_URL: production ? "https://localhost:3113" : baseURL, DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000" },
   },
 });

@@ -51,7 +51,7 @@ it("detail warns for absent, failed, or over-90-minute availability checks, not 
 
 it("detail shows missing-field rows and renders only verified platform icons", async () => {
   const metadata: GameMetadata = { provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=1&cc=id&l=en", fetchedAt: 0, locale: "en", country: "ID", aboutText: "Store summary", aboutKind: "summary", developer: null, publisher: null, platforms: null, screenshots: [] };
-  vi.mocked(getGame).mockResolvedValue({ id: "a", store: "steam", externalId: "1", kind: "free_to_keep", title: "A", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: null });
+  vi.mocked(getGame).mockResolvedValue({ id: "a", store: "steam", externalId: "1", kind: "free_to_keep", title: "A", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: ["windows", "macos", "linux"] });
   for (const platforms of [null, [], ["windows"]] as GameMetadata["platforms"][]) {
     vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata: { ...metadata, platforms }, attemptedAt: null, errorCode: null });
     const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "a" }) }));
@@ -59,7 +59,10 @@ it("detail shows missing-field rows and renders only verified platform icons", a
     expect(html).toContain("<dt>Developer</dt>");
     expect(html).toContain("<dt>Publisher</dt>");
     expect(html).toContain("Not listed by Steam, Epic or Wikidata");
-    if (platforms?.length) expect(html).toContain('aria-label="Windows"');
+    const header = html.slice(html.indexOf('<header class="detail-head">'), html.indexOf('</header>'));
+    expect(header).not.toContain('aria-label="Platforms"');
+    expect(html.match(/aria-label="Platforms"/g) ?? []).toHaveLength(platforms?.length ? 1 : 0);
+    if (platforms?.length) expect(html).toContain('<dt>Platforms</dt><dd><ul aria-label="Platforms"');
   }
 });
 

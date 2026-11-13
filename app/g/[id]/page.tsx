@@ -12,6 +12,7 @@ import { readMetadataRecord } from "@/src/lib/metadata";
 import { ScreenshotGallery } from "@/src/components/ScreenshotGallery";
 import { DetailBar } from "@/src/components/DetailBar";
 import { DetailValue } from "@/src/components/DetailValue";
+import { safeImageUrl } from "@/src/lib/urls";
 
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession(db(), (await cookies()).toString());
@@ -25,6 +26,8 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     game.claimed = claim.rows.length > 0;
   }
   const about = metadata?.aboutText.trim() && metadata.aboutText.trim().toLowerCase() !== game.title.trim().toLowerCase() ? metadata.aboutText.trim() : "";
+  const imageUrl = safeImageUrl(game.imageUrl) ?? "";
+  const fallbackImageUrl = metadata?.screenshots[0]?.url ? safeImageUrl(metadata.screenshots[0].url) ?? "" : "";
   const sources = [...new Map(Object.values(metadata?.fieldSources ?? {}).map(source => [source.provider, source])).values()];
   const ended = game.endsAt !== null && game.endsAt <= now.getTime();
   const checked = game.confirmedAt ?? null;
@@ -32,9 +35,9 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
   return <><SiteHeader signedIn={Boolean(session)} /><main id="main" className="shell">
     <a href="/feed" className="text-link">Back to feed</a>
     <div className="detail">
-      <div className="detail-art"><GameArt imageUrl={game.imageUrl} title={game.title} store={game.store} priority sizes="(min-width: 640px) 60vw, 100vw" /></div>
+      <div className="detail-art"><GameArt imageUrl={imageUrl} fallbackImageUrl={fallbackImageUrl} title={game.title} store={game.store} priority sizes="(min-width: 640px) 60vw, 100vw" /></div>
       <header className="detail-head">
-        <div className="detail-title"><h1 className="page-title">{game.title}</h1><div className="detail-labels"><StoreBadge store={game.store} /><PlatformLabels platforms={game.platforms} /></div></div>
+        <div className="detail-title"><h1 className="page-title">{game.title}</h1><div className="detail-labels"><StoreBadge store={game.store} /></div></div>
         {game.upcoming ? <p>Coming next{game.startsAt && <>: starts <UtcTime at={game.startsAt} /></>}. Claiming opens when this giveaway starts.</p>
           : ended ? <p className="dim">Offer ended <UtcTime at={game.endsAt!} />.</p>
           : game.endsAt && <p className="dim">Ends in <Countdown endsAt={game.endsAt} now={now.getTime()} /> · <UtcTime at={game.endsAt} /></p>}

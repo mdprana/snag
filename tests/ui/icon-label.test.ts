@@ -1,11 +1,15 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { IconLabel, tooltipNext } from "@/src/components/IconLabel";
 import { PlatformLabels, StoreBadge } from "@/src/components/StoreBadge";
 import { testDb } from "../helpers/db";
-import { getGame, listArchive, listFeed } from "@/src/lib/games";
+import { getGame, listArchive, listFeed, type FeedGame } from "@/src/lib/games";
+import { GameRow } from "@/src/components/GameRow";
+import { CoverStack } from "@/src/components/CoverStack";
 import { parseSteamMetadata, saveMetadata } from "@/src/lib/metadata";
+
+vi.mock("@/src/components/ClaimButton", () => ({ ClaimButton: () => null }));
 
 it("tooltip opens on hover/focus/tap, Escape and blur/leave hide it", () => {
   expect(tooltipNext(false, "enter")).toBe(true);
@@ -37,6 +41,18 @@ it("platform list renders labels and nothing when unknown", () => {
   for (const name of ["Windows", "macOS", "Linux"]) expect(html).toContain(`aria-label="${name}"`);
   expect(renderToStaticMarkup(createElement(PlatformLabels, { platforms: null }))).toBe("");
   expect(renderToStaticMarkup(createElement(PlatformLabels, { platforms: [] }))).toBe("");
+});
+
+it("rows and hero covers keep store badges without compatibility logos", () => {
+  for (const store of ["steam", "epic"] as const) {
+    const game: FeedGame = { id: "fixture", store, externalId: "1", kind: "free_to_keep", title: "Fixture", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: ["windows", "macos", "linux"] };
+    for (const component of [createElement(GameRow, { game, now: 0, signedIn: false }), createElement(CoverStack, { games: [game] })]) {
+      const html = renderToStaticMarkup(component);
+      expect(html).toContain(`aria-label="${store === "steam" ? "Steam store" : "Epic Games Store"}"`);
+      expect(html).not.toContain('aria-label="Platforms"');
+      for (const name of ["Windows", "macOS", "Linux"]) expect(html).not.toContain(`aria-label="${name}"`);
+    }
+  }
 });
 
 it("feed, archive and detail join verified platforms; missing or invalid payload is null", async () => {
