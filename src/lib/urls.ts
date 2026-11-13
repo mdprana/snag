@@ -24,6 +24,13 @@ export function safeImageUrl(u: string): string | null {
   return allow(u, IMAGE_HOSTS);
 }
 
+export function safeTrailerUrl(u: string, appId: number): string | null {
+  const href = allow(u, new Set(["video.akamai.steamstatic.com"]));
+  if (href !== u || u.length > 1000 || u.includes("#") || !Number.isSafeInteger(appId) || appId <= 0) return null;
+  const path = new URL(href).pathname;
+  return new RegExp(`^/store_trailers/${appId}/[A-Za-z0-9_/-]+\\.m3u8$`).test(path) ? href : null;
+}
+
 export function steamDeepLink(appid: number): string {
   if (!Number.isSafeInteger(appid) || appid <= 0) throw new Error("invalid steam appid");
   return `steam://store/${appid}`;

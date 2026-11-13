@@ -23,7 +23,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     game.claimed = claim.rows.length > 0;
   }
   const about = metadata?.aboutText.trim() && metadata.aboutText.trim().toLowerCase() !== game.title.trim().toLowerCase() ? metadata.aboutText.trim() : "";
-  const sourced = metadata && (about || metadata.developer || metadata.publisher || metadata.platforms?.length || metadata.screenshots.length) ? metadata : null;
+  const sourced = metadata && (about || metadata.developer || metadata.publisher || metadata.platforms?.length || metadata.screenshots.length || metadata.trailer) ? metadata : null;
   const ended = game.endsAt !== null && game.endsAt <= now.getTime();
   const checked = game.confirmedAt ?? null;
   const stale = checked === null || !game.sourceOk || now.getTime() - checked > 90 * 60000;
@@ -52,7 +52,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           <div><dt>Source</dt><dd>{sourced.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
           <div><dt>Last checked</dt><dd><UtcTime at={sourced.fetchedAt} /></dd></div>
         </dl>
-        <ScreenshotGallery screenshots={sourced.screenshots} />
+        <ScreenshotGallery screenshots={sourced.screenshots} trailer={sourced.trailer} title={game.title} steamAppId={sourced.canonicalSteamAppId} />
       </section>}
     </div>
   </main></>;

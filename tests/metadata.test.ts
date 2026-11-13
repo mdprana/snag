@@ -84,3 +84,24 @@ it("mapped identity mismatch from Steam cannot enrich and legacy payloads still 
   expect(decodeMetadata(JSON.stringify({ ...legacy, fieldSources: { developer: { provider: "steam", sourceUrl: "https://evil.test/", productId: "123", locale: "en", country: "ID", fetchedAt: 1 } } }))).toBeNull();
   db.close();
 });
+
+const hls = "https://video.akamai.steamstatic.com/store_trailers/2015240/762264/ddabdcc5babecd239613a67c7a46e6e2199d19e3/1751067658/hls_264_master.m3u8?t=1727386629";
+const poster = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257059207/97a2adb2e79de12e138c2206396fc718364f8785/movie_600x337.jpg?t=1727386629";
+const movie = { id: 257059207, name: "Dwarven Realms Gameplay Trailer Launch", thumbnail: poster, dash_h264: hls.replace("hls_264_master.m3u8", "dash_h264.mpd"), hls_h264: hls, highlight: true };
+const withMovies = (movies: unknown) => ({ "2015240": { success: true, data: { ...dwarven["2015240"].data, movies } } });
+it("stores only a guarded official Steam HLS trailer; hostile or DASH-only movies yield none", () => {
+  expect(parseSteamMetadata(withMovies([movie]), 2015240, 1).trailer).toEqual({ kind: "native", url: hls, mimeType: "application/vnd.apple.mpegurl", poster, title: "Dwarven Realms Gameplay Trailer Launch" });
+  expect(parseSteamMetadata(withMovies([movie]), 2015240, 1).fieldSources?.trailer?.productId).toBe("2015240");
+  for (const url of [hls.replace("video.akamai", "video.akamai.steamstatic.com.evil"), hls.replace("https:", "http:"), hls.replace("/2015240/", "/440/"), hls.replace(".com/", ".com:8443/"), hls.replace("https://", "https://u:p@"), hls.replace("hls_264_master.m3u8", "dash_h264.mpd"), "com.epicgames.video://db158029"])
+    expect(parseSteamMetadata(withMovies([{ ...movie, hls_h264: url }]), 2015240, 1).trailer).toBeNull();
+  expect(parseSteamMetadata(withMovies([{ ...movie, hls_h264: undefined }]), 2015240, 1).trailer).toBeNull();
+  expect(parseSteamMetadata(withMovies([{ ...movie, thumbnail: "https://evil.test/x.jpg" }]), 2015240, 1).trailer).toBeNull();
+  expect(parseSteamMetadata(withMovies("junk"), 2015240, 1).trailer).toBeNull();
+  const ok = parseSteamMetadata(withMovies([movie]), 2015240, 1);
+  expect(decodeMetadata(JSON.stringify(ok))?.trailer?.url).toBe(hls);
+  expect(decodeMetadata(JSON.stringify({ ...ok, trailer: { ...ok.trailer, url: hls.replace("/2015240/", "/1/") } }))).toMatchObject({ trailer: null, aboutText: ok.aboutText });
+  expect(decodeMetadata(JSON.stringify({ ...ok, sourceUrl: "https://evil.test/", trailer: { ...ok.trailer, url: "bad" } }))).toBeNull();
+  const legacy = { ...ok } as Record<string, unknown>;
+  delete legacy.trailer;
+  expect(decodeMetadata(JSON.stringify(legacy))?.trailer).toBeUndefined();
+});

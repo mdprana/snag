@@ -63,6 +63,13 @@ describe("security baseline", () => {
     expect(csp).toContain("base-uri 'none'");
   });
 
+  it("csp allows media only from self and the exact Steam trailer host", () => {
+    const directives = buildCsp("n", false).split("; ");
+    expect(directives.filter((d) => d.startsWith("media-src"))).toEqual(["media-src 'self' https://video.akamai.steamstatic.com"]);
+    expect(directives).toContain("connect-src 'self'");
+    expect(buildCsp("n", false)).not.toMatch(/\*|blob:|unsafe-inline/);
+  });
+
   it("csp adds unsafe-eval only in dev", () => {
     expect(buildCsp("n", false)).not.toContain("unsafe-eval");
     expect(buildCsp("n", true)).toContain("'unsafe-eval'");

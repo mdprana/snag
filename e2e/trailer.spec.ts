@@ -1,0 +1,52 @@
+import { expect, test } from "./test";
+
+test("trailer poster is first media item, loads only on click, Escape closes and restores focus", async ({ page }) => {
+  const video: string[] = [];
+  await page.route("https://shared.akamai.steamstatic.com/fixture/**", route => route.fulfill({ path: "e2e/fixtures/cover-b.png", contentType: "image/png" }));
+  await page.route("https://video.akamai.steamstatic.com/**", route => { video.push(route.request().url()); return route.fulfill({ status: 404 }); });
+  await page.goto("/g/steam-active");
+  const thumbs = page.locator(".gallery-thumb");
+  await expect(thumbs.first()).toHaveAccessibleName("Play trailer: Copperline Rally");
+  await expect(thumbs.nth(1)).toHaveAccessibleName("Open screenshot 1");
+  expect((await thumbs.first().boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expect(page.locator("video")).toHaveCount(0);
+  expect(video).toEqual([]);
+  await thumbs.first().focus();
+  await page.keyboard.press("Enter");
+  const player = page.locator("dialog video");
+  await expect(player).toHaveAttribute("src", /store_trailers\/2400100\//);
+  await expect(player).toHaveAttribute("preload", "none");
+  expect(await player.evaluate((v: HTMLVideoElement) => ({ autoplay: v.autoplay, muted: v.muted, paused: v.paused, controls: v.controls }))).toEqual({ autoplay: false, muted: false, paused: true, controls: true });
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("button", { name: "Next", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("dialog")).toHaveCount(0);
+  await expect(thumbs.first()).toBeFocused();
+  await page.addInitScript(() => { HTMLMediaElement.prototype.canPlayType = () => ""; });
+  await page.reload();
+  await thumbs.first().click();
+  await expect(page.locator("video")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Watch trailer on Steam" })).toHaveAttribute("href", "https://store.steampowered.com/app/2400100/");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Screenshot 1 of 1" })).toBeVisible();
+});
+
+test("trailer network error keeps screenshots usable", async ({ page }) => {
+  await page.route("https://shared.akamai.steamstatic.com/fixture/**", route => route.fulfill({ path: "e2e/fixtures/cover-b.png", contentType: "image/png" }));
+  await page.route("https://video.akamai.steamstatic.com/**", route => route.fulfill({ status: 404 }));
+  await page.goto("/g/steam-active");
+  await page.locator(".gallery-thumb").first().click();
+  await page.locator("video").dispatchEvent("error");
+  await expect(page.locator("dialog").getByRole("status")).toContainText("Trailer could not load.");
+  await expect(page.getByRole("link", { name: "Watch trailer on Steam" })).toHaveAttribute("href", "https://store.steampowered.com/app/2400100/");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Screenshot 1 of 1" })).toBeVisible();
+});

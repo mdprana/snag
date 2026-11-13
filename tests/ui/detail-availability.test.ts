@@ -80,3 +80,19 @@ it("detail never renders placeholder copy, empty About or empty rows", async () 
   expect(html).toContain('<p class="about-text">Real summary.</p>');
   expect(html).not.toContain("<dt>Developer</dt>");
 });
+
+it("trailer is first media item, before screenshots, and absent trailer leaves no slot", async () => {
+  const shot = { url: "https://shared.akamai.steamstatic.com/s.jpg", thumbnailUrl: "https://shared.akamai.steamstatic.com/t.jpg" };
+  const trailer = { kind: "native" as const, url: "https://video.akamai.steamstatic.com/store_trailers/1/a/hls_264_master.m3u8", mimeType: "application/vnd.apple.mpegurl" as const, poster: "https://shared.akamai.steamstatic.com/p.jpg", title: "Launch" };
+  const base: GameMetadata = { provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=1&cc=id&l=en", fetchedAt: 0, locale: "en", country: "ID", aboutText: "", aboutKind: "summary", developer: null, publisher: null, platforms: null, screenshots: [], canonicalSteamAppId: 1 };
+  vi.mocked(getGame).mockResolvedValue({ id: "a", store: "steam", externalId: "1", kind: "free_to_keep", title: "A", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: null });
+  for (const metadata of [{ ...base, trailer, screenshots: [shot] }, { ...base, trailer }, { ...base, screenshots: [shot] }, { ...base, trailer: null }]) {
+    vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata, attemptedAt: null, errorCode: null });
+    const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "a" }) }));
+    expect(html).not.toContain("<video");
+    expect(html).not.toContain("m3u8");
+    expect(html.includes('aria-label="Play trailer: A"')).toBe(Boolean(metadata.trailer));
+    if (metadata.trailer && metadata.screenshots.length) expect(html.indexOf("Play trailer")).toBeLessThan(html.indexOf("Open screenshot 1"));
+    if (!metadata.trailer && !metadata.screenshots.length) expect(html).not.toContain("gallery");
+  }
+});

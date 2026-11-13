@@ -403,6 +403,11 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
 .gallery-thumb img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
 .gallery-dialog { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; width: 100%; height: 100%; max-width: none; max-height: none; padding: var(--gutter); border: 0; background: rgb(11 10 9 / 0.94); color: var(--color-ink); }
 .gallery-view { display: grid; gap: 12px; width: min(100%, 1000px); }
+.gallery-trailer { position: relative; display: grid; place-items: center; }
+.gallery-trailer > * { grid-area: 1 / 1; }
+.play-badge { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgb(11 10 9 / 0.8); color: var(--color-ink); font-size: 18px; }
+.gallery-note { margin-top: 8px; font-size: 0.875rem; }
+.gallery-view > video { width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 70vh; background: #000; }
 .gallery-view > img { width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
 .gallery-close { justify-self: end; }
 .gallery-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
