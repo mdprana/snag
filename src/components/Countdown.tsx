@@ -13,8 +13,7 @@ export function formatUtc(at: number): string {
 
 export function Countdown({ endsAt, now }: { endsAt: number; now: number }): React.ReactElement {
   const remaining = endsAt - now;
-  const absolute = new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeStyle: "short", timeZone: "UTC" }).format(endsAt);
-  return <span className="countdown" aria-label={`Ends ${absolute} UTC`}>{formatCountdown(remaining)}</span>;
+  return <span className="countdown" aria-label={`Ends ${formatUtc(endsAt)}`}>{formatCountdown(remaining)}</span>;
 }
 
 export function UtcTime({ at }: { at: number }): React.ReactElement {

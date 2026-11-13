@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 
 test.beforeEach(async ({ context, page }) => {
   await context.addCookies([{ name: "__Host-snag_sid", value: "e2e-session-only", domain: "localhost", path: "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
@@ -8,16 +8,16 @@ test("feed shows free now, coming next, key giveaways", async ({ page }) => {
   for (const title of ["Free now", "Coming next", "Key giveaways"]) await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
   for (const title of ["Lantern Harbor", "Copperline Rally", "Hollow Orchard", "Starfall Cartographers: Expedition Edition Founder's Pack"]) await expect(page.getByRole("link", { name: title, exact: true })).toBeVisible();
   await expect(page.getByText(/^Game (active|next|key)$/)).toHaveCount(0);
-  await expect(page.locator("section").filter({ has: page.getByRole("heading", { name: "Coming next" }) }).getByRole("link", { name: "Claim", exact: true })).toHaveCount(0);
+  await expect(page.locator("section").filter({ has: page.getByRole("heading", { name: "Coming next" }) }).getByRole("link", { name: /^Claim\b/ })).toHaveCount(0);
 });
 test("claim button href is checkout url", async ({ page }) => {
-  await expect(page.locator("article").filter({ hasText: "Lantern Harbor" }).getByRole("link", { name: "Claim", exact: true })).toHaveAttribute("href", "https://store.epicgames.com/purchase?offers=active");
+  await expect(page.locator("article").filter({ hasText: "Lantern Harbor" }).getByRole("link", { name: "Claim on Epic Games Store (opens in a new tab)", exact: true })).toHaveAttribute("href", "https://store.epicgames.com/purchase?offers=active");
 });
 test("mark claimed collapses row", async ({ page }) => {
   const row = page.locator("article").filter({ hasText: "Lantern Harbor" });
   await row.getByRole("button", { name: "Mark claimed" }).click();
   await expect(page.getByRole("link", { name: "Claimed: Lantern Harbor" })).toBeVisible();
-  await expect(row.getByRole("link", { name: "Claim", exact: true })).toHaveCount(0);
+  await expect(row.getByRole("link", { name: /^Claim\b/ })).toHaveCount(0);
   await row.getByRole("button", { name: "Claimed · Undo" }).click();
   await expect(row.getByRole("button", { name: "Mark claimed" })).toBeVisible();
 });
@@ -35,8 +35,8 @@ test("mark claimed aligns across row types", async ({ page }) => {
 });
 test("key giveaway CTA does not squeeze title at 390px", async ({ page }) => {
   const row = page.locator("article").filter({ hasText: "Starfall Cartographers" });
-  const cta = row.getByRole("link", { name: "Get key on GamerPower" });
-  await expect(cta).toHaveText("Get key");
+  const cta = row.getByRole("link", { name: "Get key on GamerPower (opens in a new tab)" });
+  expect(await cta.evaluate(element => element.firstChild?.textContent)).toBe("Get key");
   const title = (await row.getByRole("heading").boundingBox())!;
   expect(title.width).toBeGreaterThanOrEqual(200);
   expect((await cta.boundingBox())!.y).toBeGreaterThanOrEqual(title.y + title.height - 1);

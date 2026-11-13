@@ -41,13 +41,15 @@ body {
   font-family: var(--font-body);
 }
 
-h1, h2, h3, .numeral, .display {
+h1, h2, h3, .display {
   font-family: var(--font-display);
 }
 
 h1, h2, h3, .statement { text-wrap: balance; }
 p, li { text-wrap: pretty; }
-time, .countdown { font-variant-numeric: tabular-nums; }
+/* Atkinson draws a slashed zero; keep it to mono labels and set times and countdowns in Saira. */
+time, .countdown { font-family: var(--font-display); font-variant-numeric: tabular-nums; }
+:is(.meta, .cover-status) :is(time, .countdown) { font-family: inherit; }
 
 a[href], button, summary, label[for], select, input[type="checkbox"] { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
@@ -171,52 +173,41 @@ a[href], button, input, select {
 
 /* Media */
 .game-art-media { position: relative; display: block; }
-.game-art-media .game-art-fallback { display: none; }
-.game-art-media:has(img:not([src])) .game-art-fallback { display: flex; }
-
-.game-art {
-  display: block;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: var(--radius-media);
-  background: var(--color-surface);
-}
-
-img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
-
-.game-art-fallback {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 8px 10px;
+.game-art-media .game-art-fallback {
+  display: grid;
+  place-items: center;
   border: 1px solid var(--color-line);
-  background: linear-gradient(135deg, #161412 0 60%, #2a2622 60% 61%, #161412 61%);
+  background: var(--color-surface);
   color: var(--color-ink-dim);
-  font: 10px/1.2 var(--font-mono);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  container-type: inline-size;
 }
 
-.game-art-fallback strong {
-  align-self: flex-end;
-  color: var(--color-ink);
-  font: 600 clamp(14px, 4vw, 28px)/1 var(--font-display);
+.game-art-fallback span { font: 600 clamp(24px, 12cqi, 72px)/1 var(--font-display); text-transform: uppercase; }
+
+/* Hero: official artwork carries state; with no art the hero is a single text column. */
+/* The only page atmosphere: two faint washes anchored to the top of Home, full-bleed via body so nothing overflows. */
+body:has(.hero) {
+  background:
+    radial-gradient(60% 700px at 15% 0%, rgb(255 90 60 / 0.08), transparent 70%),
+    radial-gradient(50% 600px at 85% 0%, rgb(102 192 244 / 0.06), transparent 70%),
+    var(--background);
 }
 
-/* Hero: official artwork carries state; CSS geometry marks truly empty data. */
 .hero {
   display: grid;
-  gap: 40px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "art" "body";
+  gap: 28px;
   padding-block: 24px 64px;
-  background: linear-gradient(120deg, transparent, rgb(255 90 60 / 0.06));
 }
 
-.hero-art-link { display: block; max-width: 600px; justify-self: center; width: 100%; }
-.hero-art-link .game-art { aspect-ratio: 16 / 11; box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.7); }
-.hero-empty-art { display: grid; aspect-ratio: 16 / 11; max-width: 600px; width: 100%; place-items: center; justify-self: center; border: 1px solid var(--color-line); background: linear-gradient(135deg, var(--color-surface) 0 48%, var(--color-line) 48% 49%, var(--color-surface) 49%); }
-.hero-empty-art span { color: var(--color-signal); font: 700 clamp(42px, 12vw, 120px)/1 var(--font-display); letter-spacing: -0.08em; }
+.hero:not(:has(.hero-art)) { grid-template-areas: "head" "body"; }
+.hero-head { grid-area: head; }
+.hero-art { grid-area: art; min-width: 0; }
+.hero-body { grid-area: body; }
+.hero-ending { display: grid; gap: 8px; margin-block: 28px 4px; }
+.hero-game { font: 600 clamp(20px, 3vw, 26px)/1.15 var(--font-display); }
+.hero-countdown { display: flex; align-items: baseline; gap: 10px; font: 600 clamp(24px, 4vw, 32px)/1 var(--font-display); }
 
 .hero-title {
   font-size: clamp(30px, 6vw, 52px);
@@ -225,18 +216,6 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
   line-height: 0.95;
   letter-spacing: -0.02em;
   text-transform: uppercase;
-}
-
-.hero-count { color: var(--color-signal); }
-
-.numeral {
-  display: block;
-  font-size: clamp(72px, 16vw, 148px);
-  font-weight: 700;
-  font-stretch: 75%;
-  line-height: 0.82;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
 }
 
 .hero-copy { max-width: 46ch; font-size: 18px; line-height: 1.5; }
@@ -279,11 +258,17 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
 .cover-link { display: block; border-radius: var(--radius-media); box-shadow: 0 24px 48px -16px rgb(0 0 0 / 0.7); transition: transform var(--t-quick) var(--ease-out-snag); }
 .cover-link:active { transform: scale(0.96); }
 .cover-link:focus-visible { outline-offset: 4px; }
-.cover-caption { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; background: var(--color-surface); border-radius: 0 0 var(--radius-media) var(--radius-media); }
+.cover-caption { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 12px 4px; background: var(--color-surface); }
 .cover-title { min-width: 0; overflow-wrap: anywhere; font: 600 clamp(18px, 3vw, 24px)/1.2 var(--font-display); }
-.cover-caption .badge { flex-shrink: 0; }
+.cover-labels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 4px 4px; background: var(--color-surface); border-radius: 0 0 var(--radius-media) var(--radius-media); }
+.cover-status { margin-left: auto; padding-right: 8px; color: var(--color-ink-dim); font: 12px/1.4 var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; }
+/* Hidden until the motion fan-in runs; the delayed CSS reveal is a safety net if scripts stall. */
+@keyframes show { to { opacity: 1; } }
+@media (scripting: enabled) { .cover-fan { opacity: 0; animation: show 0s 3s forwards; } }
+/* Below-fold reveal waits for scroll; reduced motion or a stalled script never leaves an empty gap. */
+@media (prefers-reduced-motion: no-preference) { .reveal-item { opacity: 0; animation: show 0s 3s forwards; } }
 .cover-link .game-art { border-radius: var(--radius-media) var(--radius-media) 0 0; }
-.cover:not(:first-child) .cover-caption { visibility: hidden; }
+.cover:not(:first-child) :is(.cover-caption, .cover-labels) { visibility: hidden; }
 .cover:not(:first-child) { filter: none; width: 72%; }
 .cover:not(:first-child) .game-art { filter: brightness(0.65); }
 @media (max-width: 639px) { .claim-actions { align-items: stretch; } .game-row-actions { grid-column: 1 / -1; } }
@@ -294,10 +279,9 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
 @keyframes fade { from { opacity: 0; } }
 
 .enter { animation: rise var(--t-slow) var(--ease-out-snag) both; animation-delay: calc(var(--d, 0) * 0.08s); }
-.cover { animation: rise var(--t-slow) var(--ease-out-snag) both; animation-delay: calc(0.2s + var(--i) * 0.1s); }
 
-/* Sections */
-.section { padding-block: 64px; border-top: 1px solid var(--color-line); }
+/* Sections: one faint gradient rule between landing sections. */
+.section { padding-block: 64px; background: linear-gradient(90deg, transparent, var(--color-line) 20%, var(--color-line) 80%, transparent) top / 100% 1px no-repeat; }
 
 .section-title {
   font-size: clamp(26px, 4vw, 40px);
@@ -347,6 +331,14 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
 .feed-section + .feed-section { margin-top: 48px; }
 .feed-section h2 { font-size: 24px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
 
+.icon-label { position: relative; display: inline-flex; }
+.icon-label button { display: inline-grid; place-items: center; color: var(--color-ink); font: 600 12px/1 var(--font-mono); letter-spacing: 0.02em; border-radius: 6px; }
+.icon-steam button { color: var(--color-steam); }
+.icon-label button:hover { background: var(--color-line); }
+.icon-tooltip { position: absolute; bottom: calc(100% + 4px); left: 50%; translate: -50% 0; z-index: 20; white-space: nowrap; padding: 4px 8px; border: 1px solid #5a534b; background: var(--color-bg); color: var(--color-ink); font: 12px/1.3 var(--font-mono); pointer-events: none; }
+.icon-tooltip[hidden] { display: none; }
+.platform-labels { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+
 .banner { border: 1px solid #5a534b; background: var(--color-surface); padding: 12px 16px; }
 
 .game-row {
@@ -378,12 +370,18 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
 .entry-motion:nth-child(n+6) { animation-delay: 0.3s; }
 
 /* Detail */
-.detail { display: grid; gap: 24px; padding-block: 16px 160px; }
-.detail-meta { grid-column: 1 / -1; max-width: 72ch; overflow-wrap: anywhere; }
+.detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 16px 160px; }
+.detail-art { position: relative; min-width: 0; }
+.detail-art::after { content: ""; position: absolute; inset: auto 0 0; height: 40%; border-radius: 0 0 var(--radius-media) var(--radius-media); background: linear-gradient(transparent, rgb(11 10 9 / 0.7)); pointer-events: none; }
+.detail-head { display: grid; gap: 16px; min-width: 0; align-content: start; overflow-wrap: anywhere; }
+.detail-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.detail-title .page-title { min-width: 0; }
+.detail-labels { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.detail-meta { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
 .detail-meta h2 { font-size: 28px; }
 .about-label { color: var(--color-signal); font: 12px/1.4 var(--font-mono); text-transform: uppercase; }
-.about-text { white-space: pre-wrap; line-height: 1.6; }
-.metadata-list { display: grid; gap: 12px; margin-top: 24px; }
+.about-text { max-width: 68ch; white-space: pre-wrap; line-height: 1.6; }
+.metadata-list { display: grid; gap: 12px 32px; margin-top: 24px; }
 .metadata-list div { display: grid; grid-template-columns: minmax(100px, 0.35fr) minmax(0, 1fr); gap: 16px; border-top: 1px solid var(--color-line); padding-top: 10px; }
 .metadata-list dt { color: var(--color-ink-dim); }
 .metadata-list dd { margin: 0; }
@@ -416,16 +414,20 @@ img.game-art { outline: 1px solid oklch(1 0 0 / 0.1); outline-offset: -1px; }
 
 @media (min-width: 768px) {
   .split { grid-template-columns: 7fr 5fr; align-items: center; }
+  .metadata-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 1024px) {
-  .hero { grid-template-columns: 5fr 6fr; align-items: center; padding-block: 32px 96px; }
+  .hero { padding-block: 32px 96px; }
+  .hero:has(.hero-art) { grid-template-columns: 5fr 6fr; grid-template-areas: "head art" "body art"; column-gap: 40px; row-gap: 20px; align-items: end; }
+  .hero-body { align-self: start; }
+  .hero-art { align-self: center; }
   .section { padding-block: 96px; }
 }
 
 /* Reduced motion: no transforms, tilt or float; opacity only. */
 @media (prefers-reduced-motion: reduce) {
-  .enter, .cover, .entry-motion { animation-name: fade; animation-duration: var(--t-quick); }
+  .enter, .entry-motion { animation-name: fade; animation-duration: var(--t-quick); }
   .cover, .cover-stack { transform: none; }
   .cover-float { transform: none !important; }
   .btn, .cover-stack, .cover-link { transition: none; }

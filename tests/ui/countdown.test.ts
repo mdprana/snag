@@ -8,7 +8,7 @@ describe("Countdown", () => {
     const now = Date.UTC(2026, 10, 12);
     const endsAt = now + 2 * 86400000 + 4 * 3600000;
     expect(formatCountdown(endsAt - now)).toBe("2d 4h");
-    expect(renderToStaticMarkup(createElement(Countdown, { endsAt, now }))).toContain('aria-label="Ends November 14, 2026 at 4:00 AM UTC"');
+    expect(renderToStaticMarkup(createElement(Countdown, { endsAt, now }))).toContain('aria-label="Ends Nov 14, 2026, 4:00 AM UTC"');
   });
   it("handles ended and less than one hour", () => {
     expect(formatCountdown(0)).toBe("ended");

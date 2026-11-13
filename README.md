@@ -32,6 +32,9 @@ Discover an offer, check its claim window, and open the store to keep it. Snag b
 - **Security headers** with a nonce-based Content Security Policy.
 - **Configuration validation** and sensitive-field redaction in logs.
 - **Public landing page**, database-backed game feed and game detail pages, with claim links and per-account claim tracking.
+- **Bounded store metadata**, About content and screenshot galleries, with honest fallbacks when store data is unavailable.
+- **Artwork-led hero** and recognizable store/platform icons with accessible labels.
+- **UTC dates** for consistent offer timing.
 - **Offer polling** for Epic, Steam and GamerPower, with last-known data retained on source errors. An external scheduler must invoke the protected cron route; the app does not schedule itself.
 - **Steam sign-in**, optional Epic sign-in, logout and account deletion. Provider login remains unverified live; Epic login is disabled by default.
 - **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Browser push delivery remains unverified live, including iPhone Home Screen behavior.
@@ -107,7 +110,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable fixture database and starts local HTTPS on port 3100.
+Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser checks cover 26 cases across 320, 390, 768 and 1440 px widths, all using synthetic fixtures, not live integration. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable fixture database and starts local HTTPS on port 3100.
 
 Additional dependency and secret checks:
 

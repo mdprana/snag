@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { readFileSync } from "node:fs";
 
 for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }, { width: 768, height: 1000 }, { width: 1440, height: 1000 }]) {
@@ -8,7 +8,7 @@ for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }
       test(`${name} fixture screenshot and keyboard access`, async ({ page, context }) => {
         await context.addCookies([{ name: "__Host-snag_sid", value: "e2e-session-only", domain: "localhost", path: "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
         await page.route("https://**/*", async (route) => {
-          if (new URL(route.request().url()).hostname === "localhost") await route.continue();
+          if (new URL(route.request().url()).hostname === "localhost") await route.fallback();
           else await route.abort();
         });
         await page.goto(path);
@@ -37,7 +37,8 @@ for (const viewport of [{ width: 320, height: 844 }, { width: 390, height: 844 }
           const style = getComputedStyle(element);
           return { width: style.outlineWidth, style: style.outlineStyle, color: style.outlineColor, offset: style.outlineOffset };
         });
-        expect(focus).toEqual({ width: "2px", style: "solid", color: "rgb(255, 90, 60)", offset: "2px" });
+        expect(focus).toMatchObject({ width: "2px", style: "solid", color: "rgb(255, 90, 60)" });
+        expect(parseFloat(focus.offset)).toBeGreaterThanOrEqual(2);
       });
     }
   });

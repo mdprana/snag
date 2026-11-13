@@ -5,9 +5,9 @@ import { notFound } from "next/navigation";
 import { db } from "@/src/lib/db";
 import { getGame } from "@/src/lib/games";
 import { getSession } from "@/src/lib/session";
-import { StoreBadge } from "@/src/components/StoreBadge";
+import { PlatformLabels, StoreBadge } from "@/src/components/StoreBadge";
 import { ClaimButton } from "@/src/components/ClaimButton";
-import { Countdown } from "@/src/components/Countdown";
+import { Countdown, UtcTime } from "@/src/components/Countdown";
 import { readMetadataRecord } from "@/src/lib/metadata";
 import { ScreenshotGallery } from "@/src/components/ScreenshotGallery";
 
@@ -22,5 +22,39 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     const claim = await db().execute({ sql: "SELECT 1 FROM claims WHERE user_id = ? AND game_id = ?", args: [session.userId, game.id] });
     game.claimed = claim.rows.length > 0;
   }
-  return <><SiteHeader signedIn={Boolean(session)} /><main id="main" className="shell"><a href="/feed" className="text-link">Back to feed</a><div className="detail"><GameArt imageUrl={game.imageUrl} title={game.title} store={game.store} priority /><article className="space-y-5"><StoreBadge store={game.store} /><h1 className="page-title">{game.title}</h1>{game.endsAt && <p className="dim"><Countdown endsAt={game.endsAt} now={now.getTime()} /> · <time dateTime={new Date(game.endsAt).toISOString()}>{new Date(game.endsAt).toLocaleString("en-US", { timeZone: "UTC" })} UTC</time></p>}{game.upcoming && <p>Coming next. Claiming opens when this giveaway starts.</p>}{game.kind === "key_giveaway" && <p className="banner">This giveaway needs a third-party account.</p>}<div className="detail-bar"><ClaimButton game={game} signedIn={Boolean(session)} /></div><section className="detail-meta" aria-labelledby="about-title"><h2 id="about-title">About</h2>{metadata ? <><p className="about-label">{metadata.aboutKind === "full" ? "Full description" : "Store summary"}</p><p className="about-text">{metadata.aboutText || "No description available."}</p><dl className="metadata-list"><div><dt>Developer</dt><dd>{metadata.developer || "Unavailable"}</dd></div><div><dt>Publisher</dt><dd>{metadata.publisher || "Unavailable"}</dd></div><div><dt>Platforms</dt><dd>{metadata.platforms?.length ? metadata.platforms.join(", ") : "Unavailable"}</dd></div><div><dt>Source</dt><dd>{metadata.provider === "steam" ? "Steam" : "Epic Games"}</dd></div><div><dt>Last checked</dt><dd><time dateTime={new Date(metadata.fetchedAt).toISOString()}>{new Date(metadata.fetchedAt).toLocaleString("en-US", { timeZone: "UTC" })} UTC</time></dd></div></dl><ScreenshotGallery screenshots={metadata.screenshots} /></> : <p className="dim">Game details unavailable. Source metadata has not been verified.</p>}</section></article></div></main></>;
+  const missing = "Details not available from store yet.";
+  const ended = game.endsAt !== null && game.endsAt <= now.getTime();
+  const checked = game.confirmedAt ?? null;
+  const stale = checked === null || !game.sourceOk || now.getTime() - checked > 90 * 60000;
+  return <><SiteHeader signedIn={Boolean(session)} /><main id="main" className="shell">
+    <a href="/feed" className="text-link">Back to feed</a>
+    <div className="detail">
+      <div className="detail-art"><GameArt imageUrl={game.imageUrl} title={game.title} store={game.store} priority sizes="(min-width: 640px) 60vw, 100vw" /></div>
+      <header className="detail-head">
+        <div className="detail-title"><h1 className="page-title">{game.title}</h1><div className="detail-labels"><StoreBadge store={game.store} /><PlatformLabels platforms={game.platforms} /></div></div>
+        {game.upcoming ? <p>Coming next{game.startsAt && <>: starts <UtcTime at={game.startsAt} /></>}. Claiming opens when this giveaway starts.</p>
+          : ended ? <p className="dim">Offer ended <UtcTime at={game.endsAt!} />.</p>
+          : game.endsAt && <p className="dim"><Countdown endsAt={game.endsAt} now={now.getTime()} /> · <UtcTime at={game.endsAt} /></p>}
+        {stale && <p role="status" className="banner">Availability updates delayed. {checked === null ? "No successful availability check yet; this offer is unconfirmed." : <>Last successful availability check <UtcTime at={checked} />.</>} Showing last-known offers; availability may have changed.</p>}
+        {game.kind === "key_giveaway" && <p className="banner">This giveaway needs a third-party account.</p>}
+        <p className="dim">Availability varies by region.</p>
+        <div className="detail-bar"><ClaimButton game={game} signedIn={Boolean(session)} /></div>
+      </header>
+      <section className="detail-meta" aria-labelledby="about-title">
+        <h2 id="about-title">About</h2>
+        {metadata ? <>
+          <p className="about-label">{metadata.aboutKind === "full" ? "Full description" : "Store summary"}</p>
+          <p className="about-text">{metadata.aboutText || missing}</p>
+          <dl className="metadata-list">
+            <div><dt>Developer</dt><dd>{metadata.developer || missing}</dd></div>
+            <div><dt>Publisher</dt><dd>{metadata.publisher || missing}</dd></div>
+            <div><dt>Platforms</dt><dd>{metadata.platforms?.length ? <PlatformLabels platforms={metadata.platforms} /> : missing}</dd></div>
+            <div><dt>Source</dt><dd>{metadata.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
+            <div><dt>Last checked</dt><dd><UtcTime at={metadata.fetchedAt} /></dd></div>
+          </dl>
+          <ScreenshotGallery screenshots={metadata.screenshots} />
+        </> : <p className="dim">{missing}</p>}
+      </section>
+    </div>
+  </main></>;
 }

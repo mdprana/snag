@@ -10,16 +10,15 @@ export function Reveal({ children, className = "" }: { children: ReactNode; clas
   useEffect(() => {
     const element = ref.current;
     if (!element || element.getBoundingClientRect().top < window.innerHeight) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const items = [...element.children] as HTMLElement[];
-    for (const item of items) {
-      item.style.opacity = "0";
-      if (!reduce) item.style.transform = "translateY(16px)";
-    }
+    for (const item of items) item.classList.add("reveal-item");
     return inView(element, () => {
-      const to = reduce ? { opacity: 1 } : { opacity: 1, transform: "translateY(0px)" };
-      animate(items.slice(0, 6), to, { duration: reduce ? 0.12 : 0.5, ease: EASE, delay: stagger(0.06) });
-      if (items.length > 6) animate(items.slice(6), to, { duration: reduce ? 0.12 : 0.5, ease: EASE, delay: 0.36 });
+      const to = { opacity: [0, 1], transform: ["translateY(16px)", "translateY(0px)"] };
+      const done = () => { for (const item of items) item.classList.remove("reveal-item"); };
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+      const first = animate(items.slice(0, 6), to, { duration: 0.5, ease: EASE, delay: stagger(0.06) });
+      const rest = items.length > 6 ? animate(items.slice(6), to, { duration: 0.5, ease: EASE, delay: 0.36 }) : null;
+      Promise.all([first, rest]).then(done);
     }, { amount: 0.15 });
   }, []);
   return <div ref={ref} className={className}>{children}</div>;

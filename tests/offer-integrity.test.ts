@@ -5,9 +5,9 @@ import { ClaimButton } from "@/src/components/ClaimButton";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 
 it("future and unconfirmed offers never expose claim links", () => {
-  const game = { id: "x", store: "steam", externalId: "123", kind: "free_to_keep", title: "X", storeUrl: "https://store.steampowered.com/app/123/", claimUrl: "", imageUrl: "", startsAt: Date.now() + 60000, endsAt: Date.now() + 120000, upcoming: false, claimed: false };
-  expect(renderToStaticMarkup(createElement(ClaimButton, { game }))).not.toContain('>Claim</a>');
-  expect(renderToStaticMarkup(createElement(ClaimButton, { game: { ...game, startsAt: null, endsAt: null } }))).not.toContain('>Claim</a>');
+  const game = { id: "x", store: "steam", externalId: "123", kind: "free_to_keep", title: "X", storeUrl: "https://store.steampowered.com/app/123/", claimUrl: "", imageUrl: "", startsAt: Date.now() + 60000, endsAt: Date.now() + 120000, upcoming: false, claimed: false, platforms: null };
+  expect(renderToStaticMarkup(createElement(ClaimButton, { game }))).not.toContain('claim-action btn');
+  expect(renderToStaticMarkup(createElement(ClaimButton, { game: { ...game, startsAt: null, endsAt: null } }))).not.toContain('claim-action btn');
 });
 import { testDb } from "./helpers/db";
 import { listFeed, lastPoll } from "@/src/lib/games";
@@ -34,4 +34,11 @@ it("lastPoll is conservative across required sources, not healthy Epic masking f
   await db.execute("INSERT INTO poll_runs(source,ok,at) VALUES('epic',1,300),('steam',1,100),('gamerpower',1,200),('steam',0,400)");
   expect(await lastPoll(db)).toBe(100);
   db.close();
+});
+
+it("active claim link names its destination and new-tab behaviour for assistive tech", () => {
+  const game = { id: "e", store: "epic", externalId: "e", kind: "free_to_keep", title: "E", storeUrl: "https://store.epicgames.com/en-US/p/e", claimUrl: "https://store.epicgames.com/purchase?offers=e", imageUrl: "", startsAt: Date.now() - 1000, endsAt: Date.now() + 60000, upcoming: false, claimed: false, platforms: null };
+  const html = renderToStaticMarkup(createElement(ClaimButton, { game }));
+  expect(html).toContain('target="_blank"');
+  expect(html).toContain('Claim<span class="sr-only"> on Epic Games Store (opens in a new tab)</span><svg aria-hidden="true"');
 });

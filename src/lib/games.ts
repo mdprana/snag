@@ -1,5 +1,6 @@
 import type { Client } from "@libsql/client";
 import { offerState } from "./offers.ts";
+import { decodeMetadata } from "./metadata.ts";
 
 export type FeedGame = {
   id: string;
@@ -16,6 +17,7 @@ export type FeedGame = {
   claimed: boolean;
   confirmedAt?: number | null;
   sourceOk?: boolean;
+  platforms: string[] | null;
 };
 
 function game(row: Record<string, unknown>): FeedGame {
@@ -25,18 +27,19 @@ function game(row: Record<string, unknown>): FeedGame {
     startsAt: row.starts_at == null ? null : Number(row.starts_at), endsAt: row.ends_at == null ? null : Number(row.ends_at),
     upcoming: row.starts_at != null && Number(row.starts_at) > Date.now(), claimed: Boolean(row.claimed),
     confirmedAt: row.confirmed_at == null ? null : Number(row.confirmed_at), sourceOk: Boolean(row.source_ok),
+    platforms: decodeMetadata(row.metadata_json)?.platforms ?? null,
   };
 }
 
 export async function listFeed(db: Client, userId: string | undefined, now: Date): Promise<{ freeNow: FeedGame[]; upcoming: FeedGame[]; keyGiveaways: FeedGame[] }> {
   const claimed = userId ? "EXISTS (SELECT 1 FROM claims c WHERE c.game_id = g.id AND c.user_id = ?)" : "0";
-  const rows = await db.execute({ sql: `SELECT g.*, ${claimed} AS claimed, ${sourceColumns} FROM games g WHERE (g.ends_at IS NULL OR g.ends_at > ?) ORDER BY g.starts_at ASC`, args: userId ? [userId, now.getTime()] : [now.getTime()] });
+  const rows = await db.execute({ sql: `SELECT g.*, ${claimed} AS claimed, ${sourceColumns}, m.payload_json AS metadata_json FROM games g LEFT JOIN game_metadata m ON m.game_id = g.id WHERE (g.ends_at IS NULL OR g.ends_at > ?) ORDER BY g.starts_at ASC`, args: userId ? [userId, now.getTime()] : [now.getTime()] });
   const all = rows.rows.map((row) => game(row as Record<string, unknown>)).filter(item => ["active", "upcoming"].includes(offerState(item, now.getTime()))).map(item => ({ ...item, upcoming: offerState(item, now.getTime()) === "upcoming" }));
   return { freeNow: all.filter((item) => !item.upcoming && item.kind === "free_to_keep"), upcoming: all.filter((item) => item.upcoming), keyGiveaways: all.filter((item) => !item.upcoming && item.kind === "key_giveaway") };
 }
 
 export async function listArchive(db: Client, now: Date): Promise<FeedGame[]> {
-  const rows = await db.execute({ sql: `SELECT g.*, 0 AS claimed, ${sourceColumns} FROM games g WHERE g.ends_at IS NOT NULL AND g.ends_at <= ? ORDER BY g.ends_at DESC LIMIT 12`, args: [now.getTime()] });
+  const rows = await db.execute({ sql: `SELECT g.*, 0 AS claimed, ${sourceColumns}, m.payload_json AS metadata_json FROM games g LEFT JOIN game_metadata m ON m.game_id = g.id WHERE g.ends_at IS NOT NULL AND g.ends_at <= ? ORDER BY g.ends_at DESC LIMIT 12`, args: [now.getTime()] });
   return rows.rows.map((row) => game(row as Record<string, unknown>));
 }
 
@@ -45,7 +48,7 @@ const sourceColumns = `(SELECT MAX(at) FROM poll_runs WHERE source=${sourceName}
   (SELECT ok FROM poll_runs WHERE source=${sourceName} ORDER BY at DESC, id DESC LIMIT 1) AS source_ok`;
 
 export async function getGame(db: Client, id: string): Promise<FeedGame | null> {
-  const result = await db.execute({ sql: `SELECT g.*, 0 AS claimed, ${sourceColumns} FROM games g WHERE g.id = ?`, args: [id] });
+  const result = await db.execute({ sql: `SELECT g.*, 0 AS claimed, ${sourceColumns}, m.payload_json AS metadata_json FROM games g LEFT JOIN game_metadata m ON m.game_id = g.id WHERE g.id = ?`, args: [id] });
   return result.rows[0] ? game(result.rows[0] as Record<string, unknown>) : null;
 }
 

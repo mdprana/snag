@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test";
 import { createClient } from "@libsql/client";
 
 test("landing count equals free games in DB", async ({ page }) => {
@@ -14,14 +14,13 @@ test("landing count equals free games in DB", async ({ page }) => {
   await expect(page.getByText(/^Game (active|next|key)$/)).toHaveCount(0);
 });
 
-test("landing offer card shows intentional art, title, store and claim timing", async ({ page }) => {
+test("landing hero shows fixture artwork, title above labelled countdown, and claim timing", async ({ page }) => {
   await page.goto("/");
   expect(await page.evaluate(() => { const box = document.querySelector("nextjs-portal")?.getBoundingClientRect(); return box ? box.width * box.height : 0; })).toBe(0);
-  const card = page.getByRole("link", { name: "Lantern Harbor", exact: true });
-  await expect(card.locator(".game-art-fallback")).toBeVisible();
-  await expect(card.locator(".game-art-fallback")).toContainText("Epic");
-  await expect(card.locator(".cover-title")).toHaveText("Lantern Harbor");
-  await expect(page.locator(".cover-stack")).toBeVisible();
+  await expect(page.locator(".cover-stack .game-art").first()).toHaveJSProperty("complete", true);
+  expect(await page.locator(".cover-stack .game-art").first().evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(page.locator(".hero-ending")).toContainText(/Lantern Harbor\s*Ends in\s*\d/);
+  await expect(page.locator(".hero-empty-art")).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/free to keep/i);
   await expect(page.locator(".hero")).toContainText("Claim before");
   await expect(page.locator(".hero time")).toHaveAttribute("datetime", /^\d{4}-\d{2}-\d{2}T/);

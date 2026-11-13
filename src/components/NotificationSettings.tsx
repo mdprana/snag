@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InstallGuide } from "./InstallGuide";
+import { UtcTime } from "./Countdown";
 
 type Device = { id: string; stores: string; createdAt: number };
 export function NotificationSettings({ devices }: { devices: Device[] }) {
@@ -49,7 +50,7 @@ export function NotificationSettings({ devices }: { devices: Device[] }) {
     {state === "denied" && <p>Notifications blocked. Open iPhone Settings, Snag, Notifications, then allow notifications. On other devices, allow notifications in browser site settings.</p>}
     {(state === "default" || state === "granted") && <button disabled={busy} onClick={() => run(enable)} className="min-h-11 bg-orange-400 px-5 py-3 font-semibold text-black">{state === "granted" ? "Enable on this device" : "Enable notifications"}</button>}
     {state === "granted" && <button disabled={busy || !devices.length} className="min-h-11 border px-5 py-3" onClick={() => run(async () => { const response = await fetch("/api/push/test", { method: "POST" }); if (!response.ok) throw new Error("Test failed"); const data = await response.json(); setMessage(data.results?.includes("ok") ? "Test notification sent." : "No notification delivered. Enable this device again."); })}>Send test</button>}
-    <section className="space-y-3"><h2 className="text-xl font-semibold">Devices</h2>{!devices.length && <p>No devices enabled.</p>}{devices.map((device, index) => <div key={device.id} className="space-y-2 border-b border-white/20 py-3"><h3>Device {index + 1}</h3><p className="text-sm">Added {new Date(device.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</p>{["epic", "steam"].map((store) => <label key={store} className="flex min-h-11 items-center justify-between capitalize">{store}<input type="checkbox" className="size-6" checked={device.stores.split(",").includes(store)} disabled={busy} onChange={(event) => run(() => update(device, store, event.target.checked))} /></label>)}<button disabled={busy} className="min-h-11 underline" onClick={() => run(async () => { const response = await fetch(`/api/push/${encodeURIComponent(device.id)}`, { method: "DELETE" }); if (!response.ok) throw new Error("Remove failed"); })}>Remove device {index + 1}</button></div>)}</section>
+    <section className="space-y-3"><h2 className="text-xl font-semibold">Devices</h2>{!devices.length && <p>No devices enabled.</p>}{devices.map((device, index) => <div key={device.id} className="space-y-2 border-b border-white/20 py-3"><h3>Device {index + 1}</h3><p className="text-sm">Added <UtcTime at={device.createdAt} /></p>{["epic", "steam"].map((store) => <label key={store} className="flex min-h-11 items-center justify-between capitalize">{store}<input type="checkbox" className="size-6" checked={device.stores.split(",").includes(store)} disabled={busy} onChange={(event) => run(() => update(device, store, event.target.checked))} /></label>)}<button disabled={busy} className="min-h-11 underline" onClick={() => run(async () => { const response = await fetch(`/api/push/${encodeURIComponent(device.id)}`, { method: "DELETE" }); if (!response.ok) throw new Error("Remove failed"); })}>Remove device {index + 1}</button></div>)}</section>
     <p role="status">{message}</p>
   </div>;
 }
