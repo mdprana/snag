@@ -458,6 +458,9 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
 
 /* Long-form pages */
 .public-prose {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   max-width: 68ch;
   margin-inline: auto;
   padding: 32px 20px max(48px, env(safe-area-inset-bottom));
@@ -489,6 +492,8 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
 }
 
 .public-prose a {
+  max-width: 100%;
+  overflow-wrap: anywhere;
   display: inline-block;
   min-height: 44px;
   padding-block: 9px;
@@ -506,12 +511,20 @@ main:has(> .detail) { padding-bottom: var(--claim-bar-space); }
 }
 
 .public-prose pre {
+  max-width: 100%;
   overflow-x: auto;
   padding: 20px;
   border: 1px solid var(--color-line);
   background: var(--color-surface);
   font: 14px/1.6 var(--font-mono);
   overflow-wrap: normal;
+}
+
+@media (max-width: 400px) {
+  .public-prose pre {
+    font-size: 13px;
+    padding: 14px;
+  }
 }
 
 h3 a[href] {
