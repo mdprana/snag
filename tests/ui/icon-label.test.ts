@@ -46,7 +46,7 @@ it("feed, archive and detail join verified platforms; missing or invalid payload
     INSERT INTO poll_runs(source,ok,at) VALUES('steam',1,99),('epic',1,99),('gamerpower',1,99);`);
   const steam = { "123": { success: true, data: { steam_appid: 123, type: "game", platforms: { windows: true, mac: false, linux: true } } } };
   await saveMetadata(db, "s", "steam", null, parseSteamMetadata(steam, 123, 1), 1);
-  await saveMetadata(db, "old", "steam", null, { ...parseSteamMetadata(steam, 123, 1), sourceUrl: "https://store.steampowered.com/api/appdetails?appids=7&cc=id&l=en" }, 1);
+  await saveMetadata(db, "old", "steam", null, { ...parseSteamMetadata(steam, 123, 1), sourceUrl: "https://store.steampowered.com/api/appdetails?appids=7&cc=id&l=en", canonicalSteamAppId: undefined, fieldSources: undefined }, 1);
   await db.execute("INSERT INTO game_metadata(game_id,provider,attempted_at,payload_json) VALUES('bad','steam',1,'{\"platforms\":[\"windows\"]}')");
   const feed = await listFeed(db, undefined, new Date(100));
   expect(Object.fromEntries(feed.freeNow.map(g => [g.id, g.platforms]))).toEqual({ s: ["windows", "linux"], bad: null, e: null });

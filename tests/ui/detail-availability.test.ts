@@ -56,8 +56,27 @@ it("detail hides missing platforms and renders only verified platforms", async (
     vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata: { ...metadata, platforms }, attemptedAt: null, errorCode: null });
     const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "a" }) }));
     expect(html.includes("<dt>Platforms</dt>")).toBe(Boolean(platforms?.length));
-    expect(html).toContain("<dt>Developer</dt><dd>Details not available from store yet.</dd>");
-    expect(html).toContain("<dt>Publisher</dt><dd>Details not available from store yet.</dd>");
+    expect(html).not.toContain("<dt>Developer</dt>");
+    expect(html).not.toContain("<dt>Publisher</dt>");
     if (platforms?.length) expect(html).toContain('aria-label="Windows"');
   }
+});
+
+it("detail never renders placeholder copy, empty About or empty rows", async () => {
+  const base: GameMetadata = { provider: "epic", sourceUrl: "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", fetchedAt: 0, locale: "en-US", country: "ID", aboutText: "", aboutKind: "summary", developer: null, publisher: null, platforms: null, screenshots: [] };
+  vi.mocked(getGame).mockResolvedValue({ id: "h", store: "epic", externalId: "h", kind: "free_to_keep", title: "Herds", storeUrl: "", claimUrl: "", imageUrl: "", startsAt: 0, endsAt: null, upcoming: false, claimed: false, platforms: null });
+  for (const metadata of [null, base, { ...base, aboutText: "  \n " }, { ...base, aboutText: "herds" }, { ...base, developer: "Dev <b>x</b>" }]) {
+    vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata, attemptedAt: null, errorCode: null });
+    const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "h" }) }));
+    expect(html).not.toMatch(/not available|Unknown|N\/A|Coming soon/);
+    expect(html).not.toContain(">About</h2>");
+    expect(html).not.toMatch(/<dd><\/dd>|<p class="about-text">\s*<\/p>/);
+    expect(html.includes("<dt>Developer</dt><dd>Dev &lt;b&gt;x&lt;/b&gt;</dd>")).toBe(Boolean(metadata?.developer));
+    expect(html.includes("<dt>Source</dt>")).toBe(Boolean(metadata?.developer));
+  }
+  vi.mocked(readMetadataRecord).mockResolvedValueOnce({ metadata: { ...base, aboutText: "Real summary." }, attemptedAt: null, errorCode: null });
+  const html = renderToStaticMarkup(await GamePage({ params: Promise.resolve({ id: "h" }) }));
+  expect(html).toContain(">About</h2>");
+  expect(html).toContain('<p class="about-text">Real summary.</p>');
+  expect(html).not.toContain("<dt>Developer</dt>");
 });

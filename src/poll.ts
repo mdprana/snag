@@ -6,7 +6,7 @@ import { fetchEpic, type GameRow } from "./sources/epic.ts";
 import { fetchGamerPower } from "./sources/gamerpower.ts";
 import { fetchSteamStore } from "./sources/steamstore.ts";
 import type { Client } from "@libsql/client";
-import { saveMetadata } from "./lib/metadata.ts";
+import { refreshSteamMetadata, saveMetadata } from "./lib/metadata.ts";
 
 type PushSubscription = { id: string; endpoint: string; p256dh: string; auth: string };
 type Send = (subscription: PushSubscription, payload: { title: string; body: string; url: string }) => Promise<unknown>;
@@ -55,6 +55,7 @@ export async function runPoll(deps: PollDeps = {}): Promise<{ source: string; ok
       results.push({ source, ok: false, count: 0 });
     }
   }
+  try { await refreshSteamMetadata(client, fetchFn, now.getTime()); } catch { log("warn", "metadata refresh failed"); }
   return results;
 }
 

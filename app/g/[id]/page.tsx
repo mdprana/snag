@@ -22,7 +22,8 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
     const claim = await db().execute({ sql: "SELECT 1 FROM claims WHERE user_id = ? AND game_id = ?", args: [session.userId, game.id] });
     game.claimed = claim.rows.length > 0;
   }
-  const missing = "Details not available from store yet.";
+  const about = metadata?.aboutText.trim() && metadata.aboutText.trim().toLowerCase() !== game.title.trim().toLowerCase() ? metadata.aboutText.trim() : "";
+  const sourced = metadata && (about || metadata.developer || metadata.publisher || metadata.platforms?.length || metadata.screenshots.length) ? metadata : null;
   const ended = game.endsAt !== null && game.endsAt <= now.getTime();
   const checked = game.confirmedAt ?? null;
   const stale = checked === null || !game.sourceOk || now.getTime() - checked > 90 * 60000;
@@ -40,21 +41,19 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
         <p className="dim">Availability varies by region.</p>
         <div className="detail-bar"><ClaimButton game={game} signedIn={Boolean(session)} /></div>
       </header>
-      <section className="detail-meta" aria-labelledby="about-title">
-        <h2 id="about-title">About</h2>
-        {metadata ? <>
-          <p className="about-label">{metadata.aboutKind === "full" ? "Full description" : "Store summary"}</p>
-          <p className="about-text">{metadata.aboutText || missing}</p>
-          <dl className="metadata-list">
-            <div><dt>Developer</dt><dd>{metadata.developer || missing}</dd></div>
-            <div><dt>Publisher</dt><dd>{metadata.publisher || missing}</dd></div>
-            {!!metadata.platforms?.length && <div><dt>Platforms</dt><dd><PlatformLabels platforms={metadata.platforms} /></dd></div>}
-            <div><dt>Source</dt><dd>{metadata.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
-            <div><dt>Last checked</dt><dd><UtcTime at={metadata.fetchedAt} /></dd></div>
-          </dl>
-          <ScreenshotGallery screenshots={metadata.screenshots} />
-        </> : <p className="dim">{missing}</p>}
-      </section>
+      {sourced && <section className="detail-meta" {...about ? { "aria-labelledby": "about-title" } : { "aria-label": "Game details" }}>
+        {about && <><h2 id="about-title">About</h2>
+          <p className="about-label">{sourced.aboutKind === "full" ? "Full description" : "Store summary"}</p>
+          <p className="about-text">{about}</p></>}
+        <dl className="metadata-list">
+          {sourced.developer && <div><dt>Developer</dt><dd>{sourced.developer}</dd></div>}
+          {sourced.publisher && <div><dt>Publisher</dt><dd>{sourced.publisher}</dd></div>}
+          {!!sourced.platforms?.length && <div><dt>Platforms</dt><dd><PlatformLabels platforms={sourced.platforms} /></dd></div>}
+          <div><dt>Source</dt><dd>{sourced.provider === "steam" ? "Steam" : "Epic Games"}</dd></div>
+          <div><dt>Last checked</dt><dd><UtcTime at={sourced.fetchedAt} /></dd></div>
+        </dl>
+        <ScreenshotGallery screenshots={sourced.screenshots} />
+      </section>}
     </div>
   </main></>;
 }

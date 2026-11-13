@@ -8,10 +8,21 @@ vi.mock("web-push", () => ({ setVapidDetails: vi.fn(), sendNotification: vi.fn()
 vi.mock("@/src/sources/epic.ts", () => ({ fetchEpic: vi.fn() }));
 vi.mock("@/src/sources/steamstore.ts", () => ({ fetchSteamStore: vi.fn(async () => []) }));
 vi.mock("@/src/sources/gamerpower.ts", () => ({ fetchGamerPower: vi.fn(async () => []) }));
+vi.mock("@/src/lib/metadata.ts", async () => ({ ...(await vi.importActual("@/src/lib/metadata.ts")), refreshSteamMetadata: vi.fn(async () => {}) }));
 import { fetchEpic } from "@/src/sources/epic";
 import { fetchSteamStore } from "@/src/sources/steamstore";
 import { fetchGamerPower } from "@/src/sources/gamerpower";
-import { parseEpicMetadata, readMetadata } from "@/src/lib/metadata";
+import { parseEpicMetadata, readMetadata, refreshSteamMetadata } from "@/src/lib/metadata";
+
+it("refreshes Steam metadata after sources without failing the poll", async () => {
+  const db = await testDb();
+  vi.mocked(fetchEpic).mockResolvedValue([]);
+  const fetchFn = vi.fn();
+  vi.mocked(refreshSteamMetadata).mockRejectedValueOnce(new Error("offline"));
+  expect((await runPoll({ db, fetchFn, now: new Date(5) })).every(result => result.ok)).toBe(true);
+  expect(refreshSteamMetadata).toHaveBeenCalledWith(db, fetchFn, 5);
+  db.close();
+});
 
 it("persists Epic metadata without extra pushes and isolates metadata failure from offers", async () => {
   const db = await setup();

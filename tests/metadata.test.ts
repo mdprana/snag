@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { testDb } from "./helpers/db";
-import { parseSteamMetadata, parseEpicMetadata, readMetadata, saveMetadata, refreshSteamMetadata } from "@/src/lib/metadata";
+import { parseSteamMetadata, parseEpicMetadata, readMetadata, saveMetadata, refreshSteamMetadata, decodeMetadata } from "@/src/lib/metadata";
 
 const steam = { "123": { success: true, data: { steam_appid: 123, type: "game", about_the_game: '<p>Hello &amp; world</p><script>bad()</script><svg><text>bad</text></svg><p>Next<img src="https://evil.test/x"></p>', platforms: { windows: true, mac: false, linux: true }, screenshots: [{ path_full: "https://shared.akamai.steamstatic.com/one.jpg", path_thumbnail: "https://shared.akamai.steamstatic.com/small.jpg" }], developers: ["Studio"], publishers: ["Publisher"] } } };
 it("extracts inert official Steam text, native platforms and provenance without discount requirement", () => {
@@ -48,4 +48,39 @@ it("refresh never treats GamerPower ID as app ID and retains stale cache on redi
     expect((await db.execute("SELECT attempted_at FROM game_metadata")).rows[0].attempted_at).toBe(90000000);
     db.close();
   }
+});
+
+const dwarven = { "2015240": { success: true, data: { steam_appid: 2015240, type: "game", name: "Dwarven Realms", short_description: "Face massive hordes.", developers: ["Crater Studios"], publishers: ["Crater Studios"], platforms: { windows: true, mac: false, linux: false } } } };
+const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+it("key giveaways enrich only from a Steam app link or exact verified mapping, with field provenance", async () => {
+  const db = await testDb();
+  await db.execute(`INSERT INTO games(id,store,external_id,kind,title,store_url,claim_url) VALUES
+    ('dw','steam','3716','key_giveaway','Dwarven Realms (Steam) Key Giveaway','https://www.gamerpower.com/dwarven-realms-steam-key-giveaway','https://www.gamerpower.com/dwarven-realms-steam-key-giveaway'),
+    ('link','steam','5000','key_giveaway','Linked Key Giveaway','https://store.steampowered.com/app/123/Linked/','https://www.gamerpower.com/linked'),
+    ('fake','steam','3717','key_giveaway','Other Game Key Giveaway','https://www.gamerpower.com/other','https://www.gamerpower.com/other'),
+    ('none','steam','2015240','key_giveaway','Unmapped Key Giveaway','https://www.gamerpower.com/x','https://www.gamerpower.com/x')`);
+  const urls: string[] = [];
+  await refreshSteamMetadata(db, async url => { urls.push(String(url)); return json(String(url).includes("2015240") ? dwarven : steam); }, 90000000);
+  expect(urls.sort()).toEqual(["https://store.steampowered.com/api/appdetails?appids=123&cc=id&l=en", "https://store.steampowered.com/api/appdetails?appids=2015240&cc=id&l=en"]);
+  const dw = await readMetadata(db, "dw");
+  expect(dw).toMatchObject({ canonicalSteamAppId: 2015240, developer: "Crater Studios", publisher: "Crater Studios", platforms: ["windows"], aboutText: "Face massive hordes." });
+  expect(dw?.fieldSources?.developer).toEqual({ provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=2015240&cc=id&l=en", productId: "2015240", locale: "en", country: "ID", fetchedAt: 90000000 });
+  expect(dw?.fieldSources?.screenshots).toBeUndefined();
+  expect((await readMetadata(db, "link"))?.canonicalSteamAppId).toBe(123);
+  expect(await readMetadata(db, "fake")).toBeNull();
+  expect(await readMetadata(db, "none")).toBeNull();
+  db.close();
+});
+it("mapped identity mismatch from Steam cannot enrich and legacy payloads still decode", async () => {
+  const db = await testDb();
+  await db.execute("INSERT INTO games(id,store,external_id,kind,title,store_url,claim_url) VALUES('dw','steam','3716','key_giveaway','Dwarven Realms (Steam) Key Giveaway','https://www.gamerpower.com/d','https://www.gamerpower.com/d')");
+  await refreshSteamMetadata(db, async () => json({ "2015240": { success: true, data: { ...dwarven["2015240"].data, name: "Something Else" } } }), 90000000);
+  expect(await readMetadata(db, "dw")).toBeNull();
+  const legacy = { ...parseSteamMetadata(steam, 123, 1) };
+  delete (legacy as Record<string, unknown>).fieldSources;
+  delete (legacy as Record<string, unknown>).canonicalSteamAppId;
+  expect(decodeMetadata(JSON.stringify(legacy))?.aboutText).toBe("Hello & world\n\nNext");
+  expect(decodeMetadata(JSON.stringify({ ...legacy, canonicalSteamAppId: 999 }))).toBeNull();
+  expect(decodeMetadata(JSON.stringify({ ...legacy, fieldSources: { developer: { provider: "steam", sourceUrl: "https://evil.test/", productId: "123", locale: "en", country: "ID", fetchedAt: 1 } } }))).toBeNull();
+  db.close();
 });
