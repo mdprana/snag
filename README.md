@@ -3,7 +3,7 @@
 <a href="https://snag.mdprana.site">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="public/logo.svg">
-    <img src=".github/readme/logo-light.svg" alt="Snag" width="360">
+    <img src=".github/readme/logo-light.svg" alt="Snag" width="230">
   </picture>
 </a>
 
