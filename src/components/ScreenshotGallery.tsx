@@ -4,10 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { GameMetadata } from "@/src/lib/metadata";
 import { safeImageUrl, safeTrailerUrl } from "@/src/lib/urls";
 
-type Props = { screenshots: GameMetadata["screenshots"]; trailer?: GameMetadata["trailer"]; title?: string; steamAppId?: number };
+type Props = { screenshots: GameMetadata["screenshots"]; trailer?: GameMetadata["trailer"]; title?: string; steamAppId?: number; trailerAppId?: number };
 
-export function ScreenshotGallery({ screenshots, trailer: candidate, title = "", steamAppId }: Props): React.ReactElement | null {
-  const trailer = candidate && steamAppId && safeTrailerUrl(candidate.url, steamAppId) && safeImageUrl(candidate.poster) ? candidate : null;
+export function ScreenshotGallery({ screenshots, trailer: candidate, title = "", steamAppId, trailerAppId }: Props): React.ReactElement | null {
+  const appId = trailerAppId ?? steamAppId;
+  const trailer = candidate && appId && safeTrailerUrl(candidate.url, appId) && safeImageUrl(candidate.poster) ? candidate : null;
   const [failed, setFailed] = useState(false);
   const [index, setIndex] = useState<number | null>(null);
   const [canHls, setCanHls] = useState(true);
@@ -60,7 +61,7 @@ export function ScreenshotGallery({ screenshots, trailer: candidate, title = "",
     setIndex(next);
   };
   const shot = index === null || index < offset ? null : screenshots[index - offset];
-  const steamPage = steamAppId ? `https://store.steampowered.com/app/${steamAppId}/` : null;
+  const steamPage = appId ? `https://store.steampowered.com/app/${appId}/` : null;
   return <section className="gallery" aria-labelledby="gallery-title">
     <h2 id="gallery-title">{trailer ? "Media" : "Screenshots"}</h2>
     <div className="gallery-grid">

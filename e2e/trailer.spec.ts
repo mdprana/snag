@@ -39,6 +39,17 @@ test("trailer poster is first media item, loads only on click, Escape closes and
   await expect(page.getByRole("img", { name: "Screenshot 1 of 1" })).toBeVisible();
 });
 
+test("Epic cross trailer poster comes first and links verified Steam app", async ({ page }) => {
+  await page.route("https://shared.akamai.steamstatic.com/fixture/**", route => route.fulfill({ path: "e2e/fixtures/cover-b.png", contentType: "image/png" }));
+  await page.addInitScript(() => { HTMLMediaElement.prototype.canPlayType = () => ""; });
+  await page.goto("/g/active");
+  const poster = page.locator(".gallery-thumb").first();
+  await expect(poster).toHaveAccessibleName("Play trailer: Lantern Harbor");
+  await expect(page.locator("video")).toHaveCount(0);
+  await poster.click();
+  await expect(page.getByRole("link", { name: "Watch trailer on Steam" })).toHaveAttribute("href", "https://store.steampowered.com/app/2400100/");
+});
+
 test("trailer network error keeps screenshots usable", async ({ page }) => {
   await page.route("https://shared.akamai.steamstatic.com/fixture/**", route => route.fulfill({ path: "e2e/fixtures/cover-b.png", contentType: "image/png" }));
   await page.route("https://video.akamai.steamstatic.com/**", route => route.fulfill({ status: 404 }));

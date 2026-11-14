@@ -1,17 +1,22 @@
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createServer } from "node:https";
-import { request } from "node:http";
+import next from "next";
 
-const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-p", "3114"], { stdio: "inherit" });
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (input, options) => {
+  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  if (["cdn1.epicgames.com", "shared.fastly.steamstatic.com", "shared.akamai.steamstatic.com"].includes(url.hostname) && url.pathname.startsWith("/fixture/")) {
+    return Promise.resolve(new Response(readFileSync(`e2e/fixtures/${url.pathname.includes("copperline") ? "cover-b" : "cover-a"}.png`), { headers: { "content-type": "image/png" } }));
+  }
+  return originalFetch(input, options);
+};
+
+const app = next({ dev: false, hostname: "localhost", port: 3100 });
+await app.prepare();
+const handler = app.getRequestHandler();
 const server = createServer({ key: readFileSync("certificates/localhost-key.pem"), cert: readFileSync("certificates/localhost.pem") }, (incoming, outgoing) => {
-  const upstream = request({ hostname: "localhost", port: 3114, method: incoming.method, path: incoming.url, headers: { ...incoming.headers, "x-forwarded-proto": "https" } }, response => {
-    outgoing.writeHead(response.statusCode ?? 502, response.headers);
-    response.pipe(outgoing);
-  });
-  upstream.on("error", () => { outgoing.writeHead(502); outgoing.end(); });
-  incoming.pipe(upstream);
+  incoming.headers["x-forwarded-proto"] = "https";
+  return handler(incoming, outgoing);
 });
-server.listen(3113);
-for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { server.close(); child.kill(signal); });
-child.on("exit", code => { server.close(); process.exit(code ?? 1); });
+server.listen(3100);
+for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => { server.close(); void app.close().then(() => process.exit(0)); });

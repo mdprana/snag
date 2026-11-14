@@ -25,11 +25,12 @@ for (const [id, store, externalId, kind, title, upcoming, image] of FIXTURE_GAME
 }
 // Test-only fictional metadata for the fictional Steam fixture.
 await database.execute({ sql: "INSERT INTO game_metadata VALUES('steam-active','steam',NULL,?,?,?,NULL)", args: [JSON.stringify({ provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=2400100&cc=id&l=en", fetchedAt: now, locale: "en", country: "ID", aboutText: "Fictional rally fixture used only for local tests.", aboutKind: "full", platforms: ["windows", "macos", "linux"], screenshots: [{ url: "https://shared.akamai.steamstatic.com/fixture/shot.jpg", thumbnailUrl: "https://shared.akamai.steamstatic.com/fixture/shot-thumb.jpg" }], developer: "Fixture Studio", publisher: "Fixture Publisher", canonicalSteamAppId: 2400100, trailer: { kind: "native", url: "https://video.akamai.steamstatic.com/store_trailers/2400100/fixture/hls_264_master.m3u8", mimeType: "application/vnd.apple.mpegurl", poster: "https://shared.akamai.steamstatic.com/fixture/poster.jpg", title: "Fixture trailer" } }), now, now] });
+await database.execute({ sql: "INSERT INTO game_metadata VALUES('active','epic','fixture',?,?,?,NULL)", args: [JSON.stringify({ provider: "epic", sourceUrl: "https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=en-US&country=ID&allowCountries=ID", fetchedAt: now, locale: "en-US", country: "ID", aboutText: "Fictional Epic fixture used only for local tests.", aboutKind: "summary", platforms: null, screenshots: [], developer: null, publisher: null, fieldSources: { trailer: { provider: "steam", sourceUrl: "https://store.steampowered.com/api/appdetails?appids=2400100&cc=id&l=en", productId: "2400100", locale: "en", country: "ID", fetchedAt: now } }, trailer: { kind: "native", url: "https://video.akamai.steamstatic.com/store_trailers/2400100/fixture/hls_264_master.m3u8", mimeType: "application/vnd.apple.mpegurl", poster: "https://shared.akamai.steamstatic.com/fixture/poster.jpg", title: "Fixture trailer" } }), now, now] });
 for (const source of ["epic", "steam", "gamerpower"]) await database.execute({ sql: "INSERT INTO poll_runs(source,ok,at) VALUES(?,1,?)", args: [source, now - 91 * 60000] });
 database.close();
 const keys = webpush.generateVAPIDKeys();
 const production = process.env.PLAYWRIGHT_PRODUCTION === "1";
-const baseURL = production ? "https://localhost:3113" : "https://localhost:3100";
+const baseURL = "https://localhost:3100";
 export default defineConfig({
   testDir: "./e2e",
   outputDir: ".work/playwright-results",
@@ -40,6 +41,6 @@ export default defineConfig({
     url: `${baseURL}/feed`,
     ignoreHTTPSErrors: true,
     timeout: 120000,
-    env: { APP_URL: production ? "https://localhost:3113" : baseURL, DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000", OWNER_STEAMID64: "76561198000000000" },
+    env: { APP_URL: baseURL, DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000", OWNER_STEAMID64: "76561198000000000" },
   },
 });

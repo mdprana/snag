@@ -11,7 +11,7 @@ const fieldNames = ["aboutText", "developer", "publisher", "platforms", "release
 const trailer = z.object({ kind: z.literal("native"), url: z.string(), mimeType: z.literal("application/vnd.apple.mpegurl"), poster: image, title: z.string().min(1).max(200) });
 const fieldSource = z.object({ provider: z.enum(["steam", "epic", "wikidata"]), sourceUrl: z.string(), productId: z.string().min(1).max(100), locale: z.enum(["en", "en-US"]), country: z.literal("ID"), fetchedAt: z.number().int().nonnegative() });
 const metadataSchema = z.object({
-  provider: z.enum(["steam", "epic"]), sourceUrl: z.string(), fetchedAt: z.number().int().nonnegative(), enrichmentAt: z.number().int().nonnegative().optional(),
+  provider: z.enum(["steam", "epic"]), sourceUrl: z.string(), fetchedAt: z.number().int().nonnegative(), enrichmentAt: z.number().int().nonnegative().optional(), trailerCheckedAt: z.number().int().nonnegative().optional(),
   locale: z.enum(["en", "en-US"]), country: z.literal("ID"), aboutText: z.string().max(20000), aboutKind: z.enum(["full", "summary"]),
   platforms: z.array(z.string().min(1).max(100)).max(30).nullable(),
   releaseDate: z.string().max(100).nullable().optional(), genres: z.array(z.string().max(100)).max(30).optional(),
@@ -20,7 +20,12 @@ const metadataSchema = z.object({
   canonicalSteamAppId: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   fieldSources: z.partialRecord(z.enum(fieldNames), fieldSource).optional(),
   trailer: trailer.nullable().optional(),
-}).refine(value => !value.trailer || (value.provider === "steam" && value.canonicalSteamAppId !== undefined && safeTrailerUrl(value.trailer.url, value.canonicalSteamAppId) === value.trailer.url))
+}).refine(value => {
+  if (!value.trailer) return true;
+  const src = value.fieldSources?.trailer;
+  const appId = src?.provider === "steam" ? Number(src.productId) : value.provider === "steam" ? value.canonicalSteamAppId : undefined;
+  return appId !== undefined && Number.isSafeInteger(appId) && appId > 0 && safeTrailerUrl(value.trailer.url, appId) === value.trailer.url;
+})
   .refine(value => value.provider === "epic" ? value.sourceUrl === epicMetadataUrl && value.locale === "en-US" && value.canonicalSteamAppId === undefined : /^https:\/\/store\.steampowered\.com\/api\/appdetails\?appids=[1-9]\d*&cc=id&l=en$/.test(value.sourceUrl) && value.locale === "en" && (value.canonicalSteamAppId === undefined || value.sourceUrl === steamUrl(value.canonicalSteamAppId)))
   .refine(value => Object.values(value.fieldSources ?? {}).every(source => source.provider === "steam" ? /^https:\/\/store\.steampowered\.com\/api\/appdetails\?appids=[1-9]\d*&cc=id&l=en$/.test(source.sourceUrl) && source.sourceUrl === steamUrl(Number(source.productId)) && source.locale === "en" : source.provider === "epic" ? source.sourceUrl === epicMetadataUrl && source.locale === "en-US" : /^Q[1-9]\d*$/.test(source.productId) && source.sourceUrl === `https://www.wikidata.org/wiki/${source.productId}` && source.locale === "en"));
 export type GameMetadata = z.infer<typeof metadataSchema>;
@@ -68,7 +73,7 @@ export function parseSteamMetadata(json: unknown, id: number, now: number, expec
   return withSources({ provider: "steam", sourceUrl: steamUrl(id), fetchedAt: now, locale: "en", country: "ID", canonicalSteamAppId: id, aboutText: text(full || data.short_description || ""), aboutKind: full ? "full" : "summary",
     platforms: data.platforms ? (["windows", "macos", "linux"] as const).filter((_, i) => [data.platforms!.windows, data.platforms!.mac, data.platforms!.linux][i]) : null,
     releaseDate: plain(data.release_date?.date), genres: (data.genres ?? []).map(item => plain(item.description)).filter((item): item is string => !!item),
-    screenshots: gallery((data.screenshots ?? []).map(item => ({ url: item.path_full, thumbnailUrl: item.path_thumbnail }))), developer: plain(data.developers?.join(", ")), publisher: plain(data.publishers?.join(", ")), trailer: steamTrailer(data.movies, id) }, String(id));
+    screenshots: gallery((data.screenshots ?? []).map(item => ({ url: item.path_full, thumbnailUrl: item.path_thumbnail }))), developer: plain(data.developers?.join(", ")), publisher: plain(data.publishers?.join(", ")), trailer: steamTrailer(data.movies, id), trailerCheckedAt: now }, String(id));
 }
 export function parseEpicMetadata(json: unknown, id: string, namespace: string, now: number): GameMetadata {
   const data = z.object({ id: z.literal(id), namespace: z.literal(namespace), description: z.string().optional(), keyImages: z.array(z.object({ type: z.string(), url: z.string() })).max(200), customAttributes: z.array(z.object({ key: z.string(), value: z.string() })).max(200).optional() }).parse(json);
@@ -135,7 +140,16 @@ export function mapPlatform(label: string): string {
 export function mergeMetadata(primary: GameMetadata, ...fallbacks: GameMetadata[]): GameMetadata {
   const result = { ...primary, fieldSources: { ...primary.fieldSources } };
   for (const fallback of fallbacks) for (const field of fieldNames) {
-    if (field === "trailer") continue;
+    if (field === "trailer") {
+      if (!result.trailer && fallback.trailer && fallback.fieldSources?.trailer?.provider === "steam") {
+        const appId = Number(fallback.fieldSources.trailer.productId);
+        if (safeTrailerUrl(fallback.trailer.url, appId) === fallback.trailer.url) {
+          result.trailer = fallback.trailer;
+          result.fieldSources.trailer = fallback.fieldSources.trailer;
+        }
+      }
+      continue;
+    }
     const current = result[field];
     const next = fallback[field];
     if ((current == null || current === "" || Array.isArray(current) && !current.length) && next != null && next !== "" && (!Array.isArray(next) || next.length)) {
@@ -168,7 +182,7 @@ export async function wikidataMetadata(title: string, base: GameMetadata, fetchF
   return mergeMetadata(base, fallback);
 }
 export async function refreshCrossMetadata(db: Client, fetchFn: typeof fetch, now: number): Promise<void> {
-  const rows = await db.execute({ sql: `SELECT g.id,g.title,g.store,m.payload_json,m.provider_namespace FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE m.payload_json IS NOT NULL AND json_valid(m.payload_json) AND ((m.error_code IS NOT NULL AND m.attempted_at<=?) OR (m.error_code IS NULL AND (json_extract(m.payload_json,'$.enrichmentAt') IS NULL OR json_extract(m.payload_json,'$.enrichmentAt')<=?))) ORDER BY g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000] });
+  const rows = await db.execute({ sql: `SELECT g.id,g.title,g.store,m.payload_json,m.provider_namespace FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE m.payload_json IS NOT NULL AND json_valid(m.payload_json) AND ((m.error_code IS NOT NULL AND m.attempted_at<=?) OR (m.error_code IS NULL AND (json_extract(m.payload_json,'$.enrichmentAt') IS NULL OR json_extract(m.payload_json,'$.enrichmentAt')<=? OR (g.store!='steam' AND json_extract(m.payload_json,'$.trailerCheckedAt') IS NULL AND json_extract(m.payload_json,'$.enrichmentAt')<=?)))) ORDER BY g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000, now] });
   const budget = AbortSignal.timeout(20000);
   let cursor = 0;
   const worker = async () => {
@@ -190,13 +204,13 @@ export async function refreshCrossMetadata(db: Client, fetchFn: typeof fetch, no
         }
       } catch { failed = true; }
       if (!base.developer || !base.publisher || !base.platforms?.length || !base.releaseDate || !base.genres?.length) try { base = await wikidataMetadata(title, base, fetchFn, signal()); } catch { failed = true; }
-      await saveMetadata(db, String(row.id), base.provider, row.provider_namespace == null ? null : String(row.provider_namespace), { ...base, enrichmentAt: now }, now, failed ? "enrichment" : null).catch(() => {});
+      await saveMetadata(db, String(row.id), base.provider, row.provider_namespace == null ? null : String(row.provider_namespace), { ...base, enrichmentAt: now, ...(row.store !== "steam" && !failed ? { trailerCheckedAt: now } : {}) }, now, failed ? "enrichment" : null).catch(() => {});
     }
   };
   await Promise.all([worker(), worker()]);
 }
 export async function refreshSteamMetadata(db: Client, fetchFn: typeof fetch, now: number): Promise<void> {
-  const rows = await db.execute({ sql: `SELECT g.id,g.external_id,g.kind,g.title,g.store_url,g.claim_url FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE g.store='steam' AND g.kind IN ('free_to_keep','key_giveaway') AND (m.attempted_at IS NULL OR (m.attempted_at<=? AND (m.fetched_at IS NULL OR m.fetched_at<=?))) ORDER BY CASE WHEN g.ends_at IS NULL OR g.ends_at>? THEN 0 ELSE 1 END,g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000, now] });
+  const rows = await db.execute({ sql: `SELECT g.id,g.external_id,g.kind,g.title,g.store_url,g.claim_url FROM games g LEFT JOIN game_metadata m ON m.game_id=g.id WHERE g.store='steam' AND g.kind IN ('free_to_keep','key_giveaway') AND (m.attempted_at IS NULL OR (m.attempted_at<=? AND (m.fetched_at IS NULL OR m.fetched_at<=?)) OR (m.error_code IS NULL AND json_valid(m.payload_json) AND json_extract(m.payload_json,'$.trailerCheckedAt') IS NULL)) ORDER BY CASE WHEN g.ends_at IS NULL OR g.ends_at>? THEN 0 ELSE 1 END,g.first_seen_at DESC LIMIT 10`, args: [now - 3600000, now - 86400000, now] });
   const budget = AbortSignal.timeout(20000);
   let cursor = 0;
   const worker = async () => {

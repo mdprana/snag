@@ -146,6 +146,46 @@ it("mapped identity mismatch from Steam cannot enrich and legacy payloads still 
   db.close();
 });
 
+it("accepts verified Epic cross trailers and rejects mismatched IDs and hosts", () => {
+  const epic = parseEpicMetadata({ id: "o", namespace: "n", keyImages: [] }, "o", "n", 1);
+  const cross = parseSteamMetadata(withMovies([movie]), 2015240, 1);
+  const merged = mergeMetadata(epic, cross);
+  expect(decodeMetadata(JSON.stringify(merged))?.trailer?.url).toBe(hls);
+  expect(merged.fieldSources?.trailer).toEqual(cross.fieldSources?.trailer);
+  for (const url of [hls.replace("/2015240/", "/440/"), hls.replace("video.akamai.steamstatic.com", "evil.test")]) {
+    expect(decodeMetadata(JSON.stringify({ ...merged, trailer: { ...merged.trailer, url } }))?.trailer).toBeNull();
+  }
+});
+it("refreshes legacy key metadata once next poll without waiting 24 hours", async () => {
+  const db = await testDb();
+  await db.execute("INSERT INTO games(id,store,external_id,kind,title,store_url) VALUES('dw','steam','3716','key_giveaway','Dwarven Realms (Steam) Key Giveaway','https://www.gamerpower.com/d')");
+  const legacy = { ...parseSteamMetadata(dwarven, 2015240, 100) };
+  delete legacy.trailerCheckedAt;
+  await saveMetadata(db, "dw", "steam", null, legacy, 100);
+  let calls = 0;
+  await refreshSteamMetadata(db, async () => { calls++; return json(withMovies([movie])); }, 101);
+  expect((await readMetadata(db, "dw"))?.trailer?.url).toBe(hls);
+  await refreshSteamMetadata(db, async () => { calls++; return json(withMovies([movie])); }, 102);
+  expect(calls).toBe(1);
+  db.close();
+});
+it("checks legacy Epic cross trailers once, including successful no-match responses", async () => {
+  const db = await testDb();
+  await db.execute("INSERT INTO games(id,store,external_id,kind,title) VALUES('g','epic','o','free_to_keep','Game')");
+  const legacy = { ...parseEpicMetadata({ id: "o", namespace: "n", keyImages: [] }, "o", "n", 1), enrichmentAt: 100 };
+  await saveMetadata(db, "g", "epic", "n", legacy, 100);
+  let searches = 0;
+  const fetchFn: typeof fetch = async url => {
+    if (String(url).includes("storesearch")) { searches++; return json({ items: [] }); }
+    return json({ search: [] });
+  };
+  await refreshCrossMetadata(db, fetchFn, 101);
+  await refreshCrossMetadata(db, fetchFn, 102);
+  expect(searches).toBe(1);
+  expect((await readMetadata(db, "g"))?.trailerCheckedAt).toBe(101);
+  db.close();
+});
+
 const hls = "https://video.akamai.steamstatic.com/store_trailers/2015240/762264/ddabdcc5babecd239613a67c7a46e6e2199d19e3/1751067658/hls_264_master.m3u8?t=1727386629";
 const poster = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/257059207/97a2adb2e79de12e138c2206396fc718364f8785/movie_600x337.jpg?t=1727386629";
 const movie = { id: 257059207, name: "Dwarven Realms Gameplay Trailer Launch", thumbnail: poster, dash_h264: hls.replace("hls_264_master.m3u8", "dash_h264.mpd"), hls_h264: hls, highlight: true };

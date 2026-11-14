@@ -13,6 +13,23 @@ import { ScreenshotGallery } from "@/src/components/ScreenshotGallery";
 import { DetailBar } from "@/src/components/DetailBar";
 import { DetailValue } from "@/src/components/DetailValue";
 import { safeImageUrl } from "@/src/lib/urls";
+import type { Metadata } from "next";
+import { offerState } from "@/src/lib/offers";
+
+const storeNames: Record<string, string> = { epic: "Epic Games Store", steam: "Steam" };
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const game = await getGame(db(), (await params).id);
+  if (!game) return {};
+  const meta = (await readMetadataRecord(db(), game.id)).metadata;
+  const store = storeNames[game.store] || (game.kind === "key_giveaway" ? "Key giveaway" : game.store);
+  const about = meta?.aboutText.trim() && meta.aboutText.trim().toLowerCase() !== game.title.trim().toLowerCase() ? meta.aboutText.trim() : "";
+  const state = offerState(game, Date.now());
+  const status = state === "ended" ? "Offer ended" : state === "upcoming" ? "Coming soon" : state === "unconfirmed" ? "Availability unconfirmed" : game.kind === "key_giveaway" ? "Key giveaway" : "Free to keep";
+  const title = `${game.title}: ${status} on ${store}`;
+  const description = `${title}.${about ? ` ${about}` : ""}`.slice(0, 160);
+  return { title, description, openGraph: { title, description } };
+}
 
 export default async function GamePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession(db(), (await cookies()).toString());
@@ -59,7 +76,7 @@ export default async function GamePage({ params }: { params: Promise<{ id: strin
           {!!sources.length && <div><dt>Source</dt><dd>{sources.map((source, index) => <span key={source.provider}>{index > 0 && ", "}<a className="text-link" href={source.sourceUrl} target="_blank" rel="noreferrer">{source.provider === "steam" ? "Steam" : source.provider === "epic" ? "Epic Games" : "Wikidata"}</a></span>)}</dd></div>}
           {metadata && <div><dt>Last checked</dt><dd><UtcTime at={metadata.fetchedAt} /></dd></div>}
         </dl>
-        {metadata && <ScreenshotGallery screenshots={metadata.screenshots} trailer={metadata.trailer} title={game.title} steamAppId={metadata.canonicalSteamAppId} />}
+        {metadata && <ScreenshotGallery screenshots={metadata.screenshots} trailer={metadata.trailer} title={game.title} steamAppId={metadata.canonicalSteamAppId} trailerAppId={metadata.fieldSources?.trailer?.provider === "steam" ? Number(metadata.fieldSources.trailer.productId) : undefined} />}
       </section>
     </div>
   </main></>;

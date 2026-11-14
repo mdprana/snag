@@ -22,11 +22,13 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
 
+  const isOgImage = /^\/(?:g\/[^/]+\/)?(?:opengraph-image|twitter-image)\/?$/.test(request.nextUrl.pathname);
   const hidden = /^\/admin\/?$/.test(request.nextUrl.pathname) && !await isOwner(request);
   const response = hidden
     ? NextResponse.rewrite(new URL("/_admin-not-found", request.url), { request: { headers: requestHeaders }, status: 404 })
     : NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set("Content-Security-Policy", csp);
+  if (!isOgImage) response.headers.set("Content-Security-Policy", csp);
+  if (isOgImage) response.headers.set("Cache-Control", "public, max-age=0, s-maxage=1800, stale-while-revalidate=86400");
   for (const [k, v] of Object.entries(securityHeaders())) response.headers.set(k, v);
   return response;
 }
