@@ -1,57 +1,89 @@
 <div align="center">
 
-<img src="public/logo.svg" alt="Snag" width="72" height="72">
+<a href="https://snag.mdprana.site">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo.svg">
+    <img src=".github/readme/logo-light.svg" alt="Snag" width="360">
+  </picture>
+</a>
 
-# Snag
+<br><br>
 
 **Good games. Zero price tag.**
 
-Free-game discovery for **Epic Games Store** and **Steam**.
+Free-game discovery for **Epic Games Store** and **Steam**, with claim windows, one-tap store links and push alerts.
 
-![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
-![React](https://img.shields.io/badge/React-19-149eca?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss&logoColor=white)
-![libSQL](https://img.shields.io/badge/Database-libSQL-4051b5)
+<br>
 
-[Features](#features) · [Quick start](#quick-start) · [Configuration](#configuration) · [Checks](#checks)
+[![Live](https://img.shields.io/badge/live-snag.mdprana.site-EF9256?style=for-the-badge)](https://snag.mdprana.site)
+
+![Next.js](https://img.shields.io/badge/Next.js-16-000?style=flat-square&logo=nextdotjs) ![React](https://img.shields.io/badge/React-19-149eca?style=flat-square&logo=react&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?style=flat-square&logo=tailwindcss&logoColor=white) ![libSQL](https://img.shields.io/badge/libSQL-Turso-4ff8d2?style=flat-square&logo=turso&logoColor=black) ![PWA](https://img.shields.io/badge/PWA-Web_Push-5a0fc8?style=flat-square&logo=pwa&logoColor=white) ![Vercel](https://img.shields.io/badge/Deploy-Vercel-000?style=flat-square&logo=vercel)
+
+[Features](#features) · [Architecture](#architecture) · [Quick start](#quick-start) · [Configuration](#configuration) · [Checks](#checks) · [Self-hosting](#deployment-and-self-hosting)
 
 </div>
 
 ---
 
-> **Local candidate, not a public-launch certification.** Owner-reported historical Steam sign-in, push delivery and ASF claiming successes do not verify this checkout or every device. Owner reporting is not activated; Epic sign-in remains off pending provider approval and verification. Docker examples are untested.
-
 ## Features
 
-Discover an offer, check its claim window, and open the store to keep it. Snag brings limited-time game giveaways into one place, using the last known offers stored in its database.
+| Feature | What it does |
+| --- | --- |
+| **One feed** | Limited-time giveaways from Epic, Steam and GamerPower in one database-backed feed, with UTC claim windows. |
+| **Game pages** | Store metadata, About text, screenshots and trailers, with honest fallbacks when store data is missing. |
+| **One-tap claim** | Opens the official store page and tracks what you claimed per account. Snag never claims for public users. |
+| **Accounts** | Steam sign-in, optional Epic sign-in (off by default), logout and self-service account deletion. |
+| **Push alerts** | Installable PWA with per-store notification preferences, device subscriptions and test notifications. |
+| **Owner status** | `/admin` shows ASF bot status, the last 20 free license claims and latest offer polls. Everyone else gets HTTP 404. |
+| **Hardened** | Nonce-based CSP, origin checks, rate limiting, strict input schemas and redacted logs. |
 
-### Current implementation
+## Architecture
 
-- **Application shell** with Next.js App Router, React and Tailwind CSS.
-- **Database migrations** for libSQL.
-- **Session and request utilities** covering origin checks, rate limiting and input validation.
-- **Security headers** with a nonce-based Content Security Policy.
-- **Configuration validation** and sensitive-field redaction in logs.
-- **Public landing page**, database-backed game feed and game detail pages, with claim links and per-account claim tracking.
-- **Bounded store metadata**, About content and screenshot galleries, with honest fallbacks when store data is unavailable.
-- **Artwork-led hero** and recognizable store/platform icons with accessible labels.
-- **UTC dates** for consistent offer timing.
-- **Offer polling** for Epic, Steam and GamerPower, with last-known data retained on source errors. An external scheduler must invoke the protected cron route; the app does not schedule itself.
-- **Steam sign-in**, optional Epic sign-in, logout and account deletion. Steam has owner-reported historical success, not a fresh live check of this checkout; Epic login is disabled by default.
-- **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Push has owner-reported historical success; delivery on each target browser, including iPhone Home Screen behavior, still needs operator verification.
-- **Privacy and self-host pages**. Optional third-party claiming tools are separate from Snag; their examples have not been tested as a deployment.
-- **Automated unit and browser tests** using local data and provider fixtures, not live account credentials.
+```mermaid
+flowchart TB
+  U([Visitors]) -->|HTTPS| PX
+  CRON([External scheduler<br/>every 30 min]) -->|POST /api/cron/poll| PX
 
-- **Owner-only status** at `/admin`: latest minimal ASF online report, receipt time, stale warning, last 20 free license claims parsed from the ASF FreePackages log, and latest offer polls. Other accounts and anonymous visitors get HTTP 404 and the not-found page with no owner data. Reporter templates are provided but not activated.
+  subgraph Vercel
+    PX[proxy.ts<br/>CSP nonce, /admin gate] --> APP[Next.js 16<br/>App Router + API routes]
+  end
 
-### Architecture
+  APP -->|poll offers + metadata| SRC[Epic, Steam,<br/>GamerPower]
+  APP <-->|sign-in| IDP[Steam OpenID,<br/>Epic OAuth]
+  APP <-->|SQL| DB[(libSQL / Turso)]
+  APP -->|Web Push / VAPID| B([Browsers and PWA])
 
-Next.js serves pages and authenticated API routes over HTTPS. libSQL stores offers, account-linked records, poll results and one latest ASF report. An external scheduler triggers offer polling. A separate local reporter reads loopback ASF IPC and sends only a bounded status summary to Snag; the web host never connects to IPC. Snag never automatically claims games for public users.
+  subgraph Host[Owner host]
+    ASF[ArchiSteamFarm<br/>+ FreePackages] -->|loopback IPC| REP[snag-asf-report<br/>timer, 5 min]
+    REP <--> ST[(asf-history.json)]
+  end
 
-### Verification limits
+  REP -->|POST /api/admin/asf-report| PX
+```
 
-Historical owner Steam, push and ASF success is separate from current reporter activation and public launch readiness. No deployed revision is certified here. Epic needs provider approval and a live integration check. Third-party Docker recipes remain untested.
+- **Polling** runs on an external scheduler. Each source is stored separately, and the last known offers stay when a source fails.
+- **The ASF reporter** reads ASF over loopback IPC and sends only a bounded summary: online flag plus up to 20 parsed claims. The web host never connects to IPC.
+- **Owner gate**: `proxy.ts` checks the session against `OWNER_STEAMID64` before `/admin` renders, so non-owners get a real 404 with no owner data.
+
+## Request flow
+
+```mermaid
+sequenceDiagram
+  participant Sch as Scheduler
+  participant App as Snag API
+  participant Src as Epic / Steam / GamerPower
+  participant DB as libSQL
+  participant Push as Web Push
+
+  Sch->>App: POST /api/cron/poll (Bearer)
+  App->>Src: fetch current giveaways
+  Src-->>App: offers
+  App->>DB: upsert offers, record poll run
+  App->>Push: notify subscribers for new offers
+  Push-->>App: delivered / gone (pruned)
+```
+
+> **Verification limits.** Unit and browser tests use fixtures, not live accounts. Steam sign-in, push and ASF claiming have owner-reported success on the live deployment, not a check on every device. Epic sign-in needs provider approval. Docker examples are untested.
 
 ## Quick start
 
@@ -174,7 +206,7 @@ The web app needs `OWNER_STEAMID64` and a separate random `ASF_REPORT_SECRET` of
 | `ASF_REPORT_SECRET` | Same separate report secret as the web app, at least 32 characters. |
 | `ASF_REPORT_STATE` | Optional claim history file, defaults to `$HOME/.local/state/snag/asf-history.json`. |
 
-On the ASF host, store reporter configuration in a private directory with mode 700 and the environment file with mode 600. Keep ASF configuration files mode 600 and Steam Guard enabled. Review the service template's Node path, checkout path and environment-file path before separately installing user units. The template expects the checkout at `%h/snag` and configuration at `%h/.config/snag/asf-report.env`. No service installation or activation is performed by the quick start.
+On the ASF host, store reporter configuration in a private directory with mode 700 and the environment file with mode 600. Keep ASF configuration files mode 600 and Steam Guard enabled. Review the service template's Node path, checkout path and environment-file path before separately installing user units. The template expects the checkout at `%h/snag` (adjust `WorkingDirectory`/`ExecStart` if yours differs) and configuration at `%h/.config/snag/asf-report.env`. No service installation or activation is performed by the quick start.
 
 A deliberate manual run, only after reviewing configuration, uses Node's environment-file support:
 
