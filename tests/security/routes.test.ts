@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Client } from "@libsql/client";
 import { testDb } from "../helpers/db";
 import { createSession } from "@/src/lib/session";
+import { boundedBody } from "@/src/lib/request";
 
 const state = vi.hoisted(() => ({ client: undefined as Client | undefined }));
 vi.mock("@/src/lib/db", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/src/lib/db")>()), db: () => state.client }));
@@ -37,6 +38,43 @@ describe("security routes", () => {
     expect(response.status).toBe(409);
     const row = await state.client.execute({ sql: "SELECT user_id FROM push_subs WHERE endpoint = ?", args: [endpoint] });
     expect(row.rows[0].user_id).toBe("user-a");
+  });
+
+  it("returns 400 for malformed UTF-8 without storing a subscription", async () => {
+    state.client = await testDb();
+    const cookie = await userCookie(state.client, "bad-utf8");
+    const response = await subscribe(new Request("https://localhost:3100/api/push/subscribe", {
+      method: "POST",
+      headers: { cookie, origin: "https://localhost:3100" },
+      body: new Uint8Array([0xc3, 0x28]),
+    }));
+    expect(response.status).toBe(400);
+    expect((await state.client.execute("SELECT * FROM push_subs")).rows).toHaveLength(0);
+  });
+
+  it("does not mask unrelated stream failures", async () => {
+    const error = new TypeError("fixture stream failure");
+    const body = new ReadableStream<Uint8Array>({ start(controller) { controller.error(error); } });
+    await expect(boundedBody(new Request("https://localhost:3100", { method: "POST", body, duplex: "half" } as RequestInit))).rejects.toBe(error);
+  });
+
+  it("rejects streamed oversized bodies before reading the rest", async () => {
+    state.client = await testDb();
+    const cookie = await userCookie(state.client, "oversize");
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(64 * 1024));
+        controller.enqueue(new Uint8Array(1));
+      },
+      cancel() { cancelled = true; },
+    });
+    const response = await subscribe(new Request("https://localhost:3100/api/push/subscribe", {
+      method: "POST", headers: { cookie, origin: "https://localhost:3100" }, body, duplex: "half",
+    } as RequestInit));
+    expect(response.status).toBe(400);
+    expect(cancelled).toBe(true);
+    expect((await state.client.execute("SELECT * FROM push_subs")).rows).toHaveLength(0);
   });
 
   it("returns 429 after Steam global limit", async () => {

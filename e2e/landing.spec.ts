@@ -271,6 +271,108 @@ test("reduced motion hero fan swaps without sliding", async ({ page }) => {
   expect(await page.locator(".cover-fan").first().evaluate(element => getComputedStyle(element).transitionDuration)).toBe("0s");
 });
 
+for (const width of [390, 1440]) test(`three-card hero hover, focus, reset and reduced motion at ${width}px`, async ({ page }, testInfo) => {
+  const database = createClient({ url: "file:.work/feed-e2e.db" });
+  const violations: string[] = [];
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
+  await page.exposeFunction("recordThreeCsp", (value: string) => violations.push(value));
+  await page.addInitScript(() => document.addEventListener("securitypolicyviolation", event => {
+    (window as unknown as { recordThreeCsp: (value: string) => void }).recordThreeCsp(`${event.effectiveDirective}: ${event.blockedURI}`);
+  }));
+  const now = Date.now();
+  await database.execute({
+    sql: "INSERT INTO games VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    args: ["three-card-only", "epic", "three-card-only", "free_to_keep", "Third card test fixture", "https://store.epicgames.com/en-US/p/three-card-only", "https://store.epicgames.com/en-US/p/three-card-only", "https://cdn1.epicgames.com/fixture/third.png", now - 1000, now + 4 * 86400000, 0, now],
+  });
+  try {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.mouse.move(0, 0);
+    await page.goto("/");
+    const stage = page.locator(".cover-stage");
+    const covers = stage.locator(".cover");
+    await expect(stage).toHaveAttribute("data-count", "3");
+    await expect(covers).toHaveCount(3);
+    await expect(covers.nth(2).locator("a")).toHaveAccessibleName("Third card test fixture");
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(1800);
+    const initial = await fanBoxes(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const third = covers.nth(2);
+    const point = await third.evaluate(element => {
+      const box = element.getBoundingClientRect();
+      for (let y = Math.max(0, box.top + 4); y < Math.min(innerHeight, box.bottom); y += 2) {
+        for (let x = Math.max(0, box.left + 4); x < Math.min(innerWidth, box.right); x += 2) {
+          if (element.contains(document.elementFromPoint(x, y))) return { x, y };
+        }
+      }
+      throw new Error("third cover has no exposed hit area");
+    });
+    await page.mouse.move(point.x, point.y);
+    for (let sample = 0; sample < 10; sample++) {
+      expect(await third.evaluate(element => element.matches(":hover"))).toBe(true);
+      await page.waitForTimeout(100);
+    }
+    const promoted = await fanBoxes(page);
+    expect(near(promoted[2], initial[0], 3)).toBe(true);
+    expect(promoted[2].z).toBeGreaterThan(Math.max(promoted[0].z, promoted[1].z));
+    await expect(third.locator(".cover-labels")).toBeVisible();
+    await expect(covers.first().locator(".cover-labels")).toBeHidden();
+    await page.mouse.move(0, 0);
+    const reset = await fanBoxes(page);
+    for (const index of [0, 1, 2]) expect(near(reset[index], initial[index], 2)).toBe(true);
+    await expect(stage).not.toHaveAttribute("style", /--tilt/);
+    await third.locator("a").focus();
+    await expect(third.locator("a")).toBeFocused();
+    const focused = await fanBoxes(page);
+    expect(near(focused[2], initial[0], 3)).toBe(true);
+    expect(focused[2].z).toBeGreaterThan(Math.max(focused[0].z, focused[1].z));
+    await third.locator("a").blur();
+    const blurred = await fanBoxes(page);
+    for (const index of [0, 1, 2]) expect(near(blurred[index], initial[index], 2)).toBe(true);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+    const reducedInitial = await fanBoxes(page);
+    await page.mouse.move(point.x, point.y);
+    expect(await third.evaluate(element => element.matches(":hover"))).toBe(true);
+    const reducedHovered = await fanBoxes(page);
+    expect(reducedHovered[2].z).toBeGreaterThan(Math.max(reducedHovered[0].z, reducedHovered[1].z));
+    for (const index of [0, 1, 2]) expect(near(reducedHovered[index], reducedInitial[index], 2)).toBe(true);
+    await page.mouse.move(0, 0);
+    await third.locator("a").focus();
+    const reducedFocused = await fanBoxes(page);
+    expect(reducedFocused[2].z).toBeGreaterThan(Math.max(reducedFocused[0].z, reducedFocused[1].z));
+    for (const index of [0, 1, 2]) {
+      expect(near(reducedFocused[index], reducedInitial[index], 2)).toBe(true);
+      await expect(covers.nth(index).locator(".cover-fan")).toHaveCSS("transition-duration", "0s");
+    }
+    await third.locator("a").blur();
+    const reducedReset = await fanBoxes(page);
+    for (const index of [0, 1, 2]) expect(near(reducedReset[index], reducedInitial[index], 2)).toBe(true);
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+    await testInfo.attach("three-card-evidence", { body: JSON.stringify({ width, initial, promoted, reset, focused, blurred, reducedInitial, reducedFocused, reducedReset, violations, errors }), contentType: "application/json" });
+    console.log(JSON.stringify({ width, cards: 3, cspEvents: violations.length, errors }));
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.reload();
+    await fanBoxes(page);
+    await stage.screenshot({ path: `.work/screenshots/reconcile-three-initial-${width}.png` });
+    await third.locator("a").focus();
+    await fanBoxes(page);
+    await stage.screenshot({ path: `.work/screenshots/reconcile-three-promoted-${width}.png` });
+    await third.locator("a").blur();
+    await page.mouse.move(0, 0);
+    await fanBoxes(page);
+    await stage.screenshot({ path: `.work/screenshots/reconcile-three-reset-${width}.png` });
+    expect(violations).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await database.execute("DELETE FROM games WHERE id = 'three-card-only'");
+    database.close();
+  }
+});
+
 for (const width of [320, 390, 1440]) test(`document background grows without tiles at ${width}`, async ({ page }) => {
   await page.setViewportSize({ width, height: 844 });
   for (const path of ["/", "/g/steam-active", "/privacy"]) {

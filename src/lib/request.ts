@@ -25,7 +25,12 @@ export async function boundedBody(request: Request, maxBytes = MAX_MUTATION_BODY
     body.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder("utf-8", { fatal: true }).decode(body);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(body);
+  } catch (error) {
+    if (error instanceof TypeError) return null;
+    throw error;
+  }
 }
 
 export async function boundedJson(request: Request): Promise<unknown | null> {
