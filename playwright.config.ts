@@ -40,6 +40,6 @@ export default defineConfig({
     url: `${baseURL}/feed`,
     ignoreHTTPSErrors: true,
     timeout: 120000,
-    env: { APP_URL: production ? "https://localhost:3113" : baseURL, DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000" },
+    env: { APP_URL: production ? "https://localhost:3113" : baseURL, DATABASE_URL: "file:.work/feed-e2e.db", NEXT_PUBLIC_VAPID_PUBLIC_KEY: keys.publicKey, VAPID_PRIVATE_KEY: keys.privateKey, VAPID_SUBJECT: "mailto:test@example.com", CRON_SECRET: "fake-cron-secret-for-e2e-only-000000", OWNER_STEAMID64: "76561198000000000" },
   },
 });

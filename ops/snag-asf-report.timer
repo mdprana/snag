@@ -1,0 +1,10 @@
+[Unit]
+Description=Report ASF status every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=snag-asf-report.service
+
+[Install]
+WantedBy=timers.target

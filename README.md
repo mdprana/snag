@@ -1,8 +1,10 @@
 <div align="center">
 
+<img src="public/logo.svg" alt="Snag" width="72" height="72">
+
 # Snag
 
-### Good games. Zero price tag.
+**Good games. Zero price tag.**
 
 Free-game discovery for **Epic Games Store** and **Steam**.
 
@@ -12,15 +14,15 @@ Free-game discovery for **Epic Games Store** and **Steam**.
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06b6d4?logo=tailwindcss&logoColor=white)
 ![libSQL](https://img.shields.io/badge/Database-libSQL-4051b5)
 
-[Overview](#overview) · [Development](#development) · [Configuration](#configuration) · [Checks](#checks)
+[Features](#features) · [Quick start](#quick-start) · [Configuration](#configuration) · [Checks](#checks)
 
 </div>
 
 ---
 
-> **In development.** Not deployed or ready for public accounts. Provider login and browser push are implemented but unverified live. Self-host examples are untested.
+> **Local candidate, not a public-launch certification.** Owner-reported historical Steam sign-in, push delivery and ASF claiming successes do not verify this checkout or every device. Owner reporting is not activated; Epic sign-in remains off pending provider approval and verification. Docker examples are untested.
 
-## Overview
+## Features
 
 Discover an offer, check its claim window, and open the store to keep it. Snag brings limited-time game giveaways into one place, using the last known offers stored in its database.
 
@@ -36,16 +38,22 @@ Discover an offer, check its claim window, and open the store to keep it. Snag b
 - **Artwork-led hero** and recognizable store/platform icons with accessible labels.
 - **UTC dates** for consistent offer timing.
 - **Offer polling** for Epic, Steam and GamerPower, with last-known data retained on source errors. An external scheduler must invoke the protected cron route; the app does not schedule itself.
-- **Steam sign-in**, optional Epic sign-in, logout and account deletion. Provider login remains unverified live; Epic login is disabled by default.
-- **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Browser push delivery remains unverified live, including iPhone Home Screen behavior.
+- **Steam sign-in**, optional Epic sign-in, logout and account deletion. Steam has owner-reported historical success, not a fresh live check of this checkout; Epic login is disabled by default.
+- **PWA and notification settings** with installation guidance, device subscriptions, per-store preferences and test notifications. Push has owner-reported historical success; delivery on each target browser, including iPhone Home Screen behavior, still needs operator verification.
 - **Privacy and self-host pages**. Optional third-party claiming tools are separate from Snag; their examples have not been tested as a deployment.
 - **Automated unit and browser tests** using local data and provider fixtures, not live account credentials.
 
-### Not verified or deployed
+- **Owner-only status** at `/admin`: latest minimal ASF online report, receipt time, stale warning and latest offer polls. Other accounts and anonymous visitors see the not-found page with no owner data (Next.js streamed responses can retain HTTP 200). Reporter templates are provided but not activated.
 
-Production hosting, live provider login, live push delivery and third-party self-host examples still need operator verification. Owner-only ASF integration is not connected. Snag never automatically claims games for public users.
+### Architecture
 
-## Development
+Next.js serves pages and authenticated API routes over HTTPS. libSQL stores offers, account-linked records, poll results and one latest ASF report. An external scheduler triggers offer polling. A separate local reporter reads loopback ASF IPC and sends only a bounded status summary to Snag; the web host never connects to IPC. Snag never automatically claims games for public users.
+
+### Verification limits
+
+Historical owner Steam, push and ASF success is separate from current reporter activation and public launch readiness. No deployed revision is certified here. Epic needs provider approval and a live integration check. Third-party Docker recipes remain untested.
+
+## Quick start
 
 Requires **Node.js 22.18+** and npm. Run commands from the project root.
 
@@ -96,7 +104,7 @@ Template: [`.env.example`](.env.example). Validator: [`src/lib/env.ts`](src/lib/
 | `CRON_SECRET` | Required random secret, at least 32 characters. |
 | `ASF_REPORT_SECRET` | Optional reporting secret, at least 32 characters when set. |
 | `OWNER_STEAMID64` | Optional owner identifier, exactly 17 digits. |
-| `EPIC_LOGIN_ENABLED` | Keep `false` until the Epic integration is configured and tested. |
+| `EPIC_LOGIN_ENABLED` | Optional; only exact `true` enables login. Keep `false` until provider approval, configuration and testing. |
 | `EPIC_CLIENT_ID` / `EPIC_CLIENT_SECRET` | Required when `EPIC_LOGIN_ENABLED=true`. Keep the secret server-side. |
 
 Presence checks do not verify provider access or key validity. Configuring a variable does not make its associated feature ready.
@@ -110,7 +118,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser checks cover 26 cases across 320, 390, 768 and 1440 px widths, all using synthetic fixtures, not live integration. Browser tests run separately with `npx playwright test` and require Playwright Chromium. Their configuration creates a disposable fixture database and starts local HTTPS on port 3100.
+Unit tests use fixtures and mocked provider responses; they do not verify live provider access or push delivery. Browser checks cover responsive layouts, CSP, artwork, trailer behavior and owner access using synthetic fixtures, not live integration. Browser tests require Playwright Chromium. Run `npx playwright test` for local HTTPS development checks, or build first and run `PLAYWRIGHT_PRODUCTION=1 npx playwright test` for production checks on HTTPS port 3113. Set `PLAYWRIGHT_BROWSERS_PATH` if your browser installation uses a custom location. Tests recreate a disposable fixture database, never the configured application database. Run `node ops/asf-report.check.mjs` for the reporter's isolated self-check.
 
 Additional dependency and secret checks:
 
@@ -136,9 +144,74 @@ proxy.ts                Content Security Policy and security headers
 
 ## Deployment and self-hosting
 
-Public hosting is not configured. Before accepting public accounts, verify provider callbacks and push delivery, configure HTTPS and a scheduler, and identify the operator, processors, privacy contact and backup-retention policy. Account deletion in Settings requires typing `DELETE`; it removes account-linked records from the active database, not operator backups or store accounts.
+Before accepting public accounts, verify the intended deployment's provider callbacks and push delivery, configure HTTPS and a scheduler, and identify the operator, processors, privacy contact and backup-retention policy. Account deletion in Settings requires typing `DELETE`; it removes account-linked records from the active database, not operator backups or store accounts.
 
-### Optional claiming tools — untested examples
+### Offer scheduler
+
+Configure an external scheduler to POST `/api/cron/poll` every 30 minutes, with `Authorization: Bearer <CRON_SECRET>`. GET returns 405; missing or wrong bearer returns 401. There is no built-in scheduler. A poll can send real notifications, so never point development checks at a live instance.
+
+With `APP_URL` and `CRON_SECRET` loaded securely into the operator shell, a manual trigger is:
+
+```sh
+curl --fail --silent --show-error --max-time 120 --request POST \
+  --header "Authorization: Bearer ${CRON_SECRET}" "${APP_URL}/api/cron/poll"
+```
+
+Do not enable shell tracing or log request headers. Check offer freshness and source status after failures; retained offers are not proof of a successful latest poll.
+
+### Optional owner reporter
+
+Templates: [`ops/asf-report.env.example`](ops/asf-report.env.example), [`ops/snag-asf-report.service`](ops/snag-asf-report.service), [`ops/snag-asf-report.timer`](ops/snag-asf-report.timer). These files do not install or configure ASF and are not activated by the app.
+
+The web app needs `OWNER_STEAMID64` and a separate random `ASF_REPORT_SECRET` of at least 32 characters. Sign in through that Steam identity to view `/admin`. The local reporter needs:
+
+| Variable | Reporter requirement |
+| --- | --- |
+| `APP_URL` | Exact HTTPS Snag origin, no trailing slash. |
+| `ASF_IPC_URL` | Optional, defaults to `http://127.0.0.1:1242`; only literal `127.0.0.1` or `[::1]`, HTTP/HTTPS, root path, no credentials/query/fragment. |
+| `ASF_BOT` | Exact bot name, 1-64 letters, digits, underscores or hyphens. |
+| `ASF_IPC_PASSWORD` | Existing private IPC password, at least 32 characters. Never send it to Snag. |
+| `ASF_REPORT_SECRET` | Same separate report secret as the web app, at least 32 characters. |
+
+On the ASF host, store reporter configuration in a private directory with mode 700 and the environment file with mode 600. Keep ASF configuration files mode 600 and Steam Guard enabled. Review the service template's Node path, checkout path and environment-file path before separately installing user units. The template expects the checkout at `%h/snag` and configuration at `%h/.config/snag/asf-report.env`. No service installation or activation is performed by the quick start.
+
+A deliberate manual run, only after reviewing configuration, uses Node's environment-file support:
+
+```sh
+node --env-file="$HOME/.config/snag/asf-report.env" ops/asf-report.mjs
+```
+
+The timer template sends every five minutes. Both HTTP calls have ten-second timeouts and reject redirects. Reporter accepts at most 1 MiB of IPC JSON, extracts only `IsConnectedAndLoggedOn`, and sends `{ "online": true, "history": "unavailable" }` with the actual boolean. Intake permits at most 1 KiB and 30 authenticated requests per minute, rejects unknown fields and keeps only the latest report. Reports older than 15 minutes show as stale.
+
+Addlicense history is explicitly unavailable: no verified durable last-20-results API was established. Ownership, online state and background key redemption are not evidence of successful free-license claims. Reporter never issues claim commands or uploads raw IPC responses, bot names, credentials or logs. See [ASF IPC documentation](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/IPC); verify compatibility with your installed version before activation. Keep IPC loopback-only; never expose it to the internet or make the web host contact it.
+
+### Database backup and restore
+
+There is no bundled backup script. For a local SQLite database, use SQLite's online backup command rather than copying an active database file. Example assumes `DATABASE_URL=file:snag.db`, a private backup directory and an installed `sqlite3` CLI:
+
+```sh
+umask 077
+mkdir -p backups
+chmod 700 backups
+sqlite3 snag.db ".backup 'backups/snag.sqlite3'"
+sqlite3 backups/snag.sqlite3 'PRAGMA integrity_check;'
+chmod 600 backups/snag.sqlite3
+```
+
+Encrypt backups and transfer them to restricted storage. Keep credentials separately protected. Define retention: backups contain identities and push subscriptions, including records deleted after the snapshot. For remote libSQL/Turso, use your provider's documented consistent backup/restore workflow instead; these local-file commands do not back up a remote database.
+
+To restore, stop your app and scheduler through your own process manager first. Preserve the current database and its WAL/SHM files as a rollback set. Restore to a new file, not over an active database:
+
+```sh
+sqlite3 backups/snag.sqlite3 'PRAGMA integrity_check;'
+sqlite3 restored-snag.db ".restore 'backups/snag.sqlite3'"
+chmod 600 restored-snag.db
+sqlite3 restored-snag.db 'PRAGMA integrity_check;'
+```
+
+Set `DATABASE_URL=file:restored-snag.db` in your protected runtime configuration, run `npm run db:migrate`, then restart your app and verify sign-in, feed and account deletion before re-enabling the scheduler. Restoring also restores old sessions/subscriptions; review revocation and deletion obligations before resuming traffic. These are operator recipes, not a tested disaster-recovery certification.
+
+### Optional claiming tools: untested examples
 
 The `/self-host` page contains fuller setup and safety notes. These third-party tools require your own credentials on your own **always-on machine** (home PC, compatible Raspberry Pi or VPS). Check image CPU support and allow about 2 GB RAM plus OS headroom for Epic’s browser. They do not connect to Snag or report claims to it.
 
