@@ -12,7 +12,7 @@ export async function POST(request: Request): Promise<Response> {
   const client = db();
   const rate = await hit(client, "admin:asf-report", 30, 60);
   if (!rate.ok) return Response.json({ error: "Too many requests" }, { status: 429, headers: { "Retry-After": String(rate.retryAfter) } });
-  const body = await boundedBody(request, 1024);
+  const body = await boundedBody(request, 8192);
   let input: unknown;
   try { input = body === null ? null : JSON.parse(body); } catch { input = null; }
   const report = AsfReport.safeParse(input);

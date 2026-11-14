@@ -33,6 +33,20 @@ it("strictly rejects invalid, unknown, oversized and malformed UTF-8 payloads", 
   expect((await state.client.execute("SELECT * FROM asf_reports")).rows).toHaveLength(0);
 });
 
+it("accepts bounded claim history and rejects invalid entries or bodies over 8 KiB", async () => {
+  state.client = await testDb(); env.ASF_REPORT_SECRET = secret;
+  const claim = { at: "2026-11-13T03:21:59.000Z", kind: "sub", id: 12345, result: "OK/NoDetail" };
+  expect((await POST(request(JSON.stringify({ online: true, history: Array(20).fill(claim) })))).status).toBe(200);
+  expect((await POST(request(JSON.stringify({ online: true, history: [] })))).status).toBe(200);
+  for (const history of [Array(21).fill(claim), [{ ...claim, raw: "line" }], [{ ...claim, kind: "bundle" }], [{ ...claim, id: 0 }], [{ ...claim, id: 4294967296 }], [{ ...claim, result: "OK" }], [{ ...claim, result: "OK/<b>" }], [{ ...claim, at: "2026-11-13 03:21:59" }]]) {
+    expect((await POST(request(JSON.stringify({ online: true, history })))).status).toBe(400);
+  }
+  const big = JSON.stringify({ online: true, history: "unavailable" }).padEnd(8193, " ");
+  expect(JSON.parse(big)).toEqual(payload);
+  expect((await POST(request(big))).status).toBe(400);
+  expect(JSON.parse(String((await state.client.execute("SELECT payload FROM asf_reports")).rows[0].payload)).history).toEqual([]);
+});
+
 it("stores only latest bounded report and rate limits intake", async () => {
   state.client = await testDb(); env.ASF_REPORT_SECRET = secret;
   for (let i = 0; i < 30; i++) expect((await POST(request())).status).toBe(200);

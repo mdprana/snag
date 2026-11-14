@@ -11,4 +11,5 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
+ReadWritePaths=%h/.local/state/snag
 TimeoutStartSec=25

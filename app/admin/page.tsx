@@ -32,7 +32,10 @@ export default async function AdminPage() {
     <h1 className="text-3xl font-semibold">Owner status</h1>
     <section aria-labelledby="asf-title"><h2 id="asf-title" className="text-xl font-semibold">ArchiSteamFarm</h2>
       {data.report && data.latest ? <><p className="mt-4">Bot at last report: {data.report.online ? "Online" : "Offline"}</p><p>Received: {new Date(Number(data.latest.received_at)).toISOString()}</p>{Boolean(data.latest.stale) && <p>Report is stale. Check the local reporter timer.</p>}</> : <p className="mt-4">No report received. Configure the local reporter to send status.</p>}
-      <p className="mt-4">Addlicense history unavailable. ASF does not expose a verified durable history of those results. Online status does not prove a successful claim.</p>
+    </section>
+    <section aria-labelledby="claims-title"><h2 id="claims-title" className="text-xl font-semibold">Last free license claims</h2>
+      {Array.isArray(data.report?.history) && data.report.history.length ? <ul className="mt-4 flex flex-col gap-3">{data.report.history.map((claim) => <li key={`${claim.at}-${claim.kind}-${claim.id}-${claim.result}`}>{claim.at} <a href={`https://store.steampowered.com/${claim.kind}/${claim.id}/`} rel="noreferrer" className="underline">{claim.kind} {claim.id}</a>: {claim.result.startsWith("OK/") ? "Success" : "Failed"} ({claim.result})</li>)}</ul> : <p className="mt-4">No claim history reported yet.</p>}
+      <p className="mt-4">From ASF FreePackages log; covers claims since reporter start.</p>
     </section>
     <section aria-labelledby="poll-title"><h2 id="poll-title" className="text-xl font-semibold">Latest offer polls</h2>
       {data.polls.length ? <ul className="mt-4 flex flex-col gap-3">{data.polls.map((poll) => <li key={String(poll.source)}><strong>{String(poll.source)}</strong>: {poll.ok ? "Succeeded" : "Failed"}, {Number(poll.count)} offers. {new Date(Number(poll.at)).toISOString()}</li>)}</ul> : <p className="mt-4">No poll recorded. Check the offer scheduler.</p>}

@@ -43,7 +43,7 @@ Discover an offer, check its claim window, and open the store to keep it. Snag b
 - **Privacy and self-host pages**. Optional third-party claiming tools are separate from Snag; their examples have not been tested as a deployment.
 - **Automated unit and browser tests** using local data and provider fixtures, not live account credentials.
 
-- **Owner-only status** at `/admin`: latest minimal ASF online report, receipt time, stale warning and latest offer polls. Other accounts and anonymous visitors see the not-found page with no owner data (Next.js streamed responses can retain HTTP 200). Reporter templates are provided but not activated.
+- **Owner-only status** at `/admin`: latest minimal ASF online report, receipt time, stale warning, last 20 free license claims parsed from the ASF FreePackages log, and latest offer polls. Other accounts and anonymous visitors get HTTP 404 and the not-found page with no owner data. Reporter templates are provided but not activated.
 
 ### Architecture
 
@@ -172,6 +172,7 @@ The web app needs `OWNER_STEAMID64` and a separate random `ASF_REPORT_SECRET` of
 | `ASF_BOT` | Exact bot name, 1-64 letters, digits, underscores or hyphens. |
 | `ASF_IPC_PASSWORD` | Existing private IPC password, at least 32 characters. Never send it to Snag. |
 | `ASF_REPORT_SECRET` | Same separate report secret as the web app, at least 32 characters. |
+| `ASF_REPORT_STATE` | Optional claim history file, defaults to `$HOME/.local/state/snag/asf-history.json`. |
 
 On the ASF host, store reporter configuration in a private directory with mode 700 and the environment file with mode 600. Keep ASF configuration files mode 600 and Steam Guard enabled. Review the service template's Node path, checkout path and environment-file path before separately installing user units. The template expects the checkout at `%h/snag` and configuration at `%h/.config/snag/asf-report.env`. No service installation or activation is performed by the quick start.
 
@@ -181,9 +182,11 @@ A deliberate manual run, only after reviewing configuration, uses Node's environ
 node --env-file="$HOME/.config/snag/asf-report.env" ops/asf-report.mjs
 ```
 
-The timer template sends every five minutes. Both HTTP calls have ten-second timeouts and reject redirects. Reporter accepts at most 1 MiB of IPC JSON, extracts only `IsConnectedAndLoggedOn`, and sends `{ "online": true, "history": "unavailable" }` with the actual boolean. Intake permits at most 1 KiB and 30 authenticated requests per minute, rejects unknown fields and keeps only the latest report. Reports older than 15 minutes show as stale.
+The timer template sends every five minutes. Every HTTP call has a ten-second timeout and rejects redirects; each IPC response is capped at 1 MiB of JSON. Reporter reads `IsConnectedAndLoggedOn` from `GET /Api/Bot/<ASF_BOT>`, then the last 500 lines from `GET /Api/NLog/File?count=500`. Only FreePackages lines for the configured bot that exactly match `ClaimFreeSub() ID: sub/N | Status: A/B` or `ClaimFreeApp() ID: app/N | Status: A/B` are kept; every other line is ignored and raw lines are never sent. Log times are host local time and are converted to UTC.
 
-Addlicense history is explicitly unavailable: no verified durable last-20-results API was established. Ownership, online state and background key redemption are not evidence of successful free-license claims. Reporter never issues claim commands or uploads raw IPC responses, bot names, credentials or logs. See [ASF IPC documentation](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/IPC); verify compatibility with your installed version before activation. Keep IPC loopback-only; never expose it to the internet or make the web host contact it.
+ASF clears its log file on restart, so the reporter keeps merged, deduplicated claims in a local state file: `ASF_REPORT_STATE`, default `$HOME/.local/state/snag/asf-history.json` (directory mode 700, file mode 600), newest first, at most 20. Create the directory once with `mkdir -p -m 700 ~/.local/state/snag` before starting the service; the template grants write access only there through `ReadWritePaths`. If the log request fails, the last saved history is sent; with no saved state, history is `"unavailable"`.
+
+Sent body: `{ "online": <boolean>, "history": [{ "at": "<UTC ISO time>", "kind": "sub" | "app", "id": <number>, "result": "<A>/<B>" }, ...] }`, or `"history": "unavailable"`. Intake permits at most 8 KiB and 30 authenticated requests per minute, rejects unknown fields and keeps only the latest report. Reports older than 15 minutes show as stale. `/admin` labels a claim Success when its result starts with `OK/`, otherwise Failed; history covers only claims logged since the reporter started keeping state. Reporter never issues claim commands or uploads raw IPC responses, bot names, credentials or raw log lines. See [ASF IPC documentation](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/IPC); verify compatibility with your installed version before activation. Keep IPC loopback-only; never expose it to the internet or make the web host contact it.
 
 ### Database backup and restore
 
